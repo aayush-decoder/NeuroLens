@@ -172,35 +172,50 @@ export default function LandingPage({
       <div className="absolute -bottom-24 -right-24 w-96 h-96 rounded-full bg-accent/10 blur-3xl" />
 
       {/* Header */}
-      <header className="sticky top-0 z-50 border-b border-border/50 bg-background/75 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60">
-        <div className="container flex h-16 items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="h-9 w-9 rounded-xl gradient-violet text-primary-foreground flex items-center justify-center font-bold shadow-lg shadow-primary/20">
-              <BookOpen className="w-5 h-5" />
+      <header className="sticky top-0 z-50 border-b border-border/25 bg-gradient-to-b from-slate-300/15 to-slate-200/25 backdrop-blur-xl shadow-md shadow-black/8 transition-all duration-300">
+        <div className="container max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex h-16 items-center justify-between">
+          <div className="flex items-center gap-3 group cursor-pointer">
+            <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-purple-500/85 to-purple-600/85 text-white flex items-center justify-center font-semibold shadow-sm shadow-purple-500/15 transition-all duration-500 group-hover:shadow-md group-hover:shadow-purple-500/25">
+              <BookOpen className="w-5 h-5 transition-transform duration-500 group-hover:scale-105" />
             </div>
-            <span className="text-lg font-bold">Enfinity</span>
+            <span className="text-lg font-semibold text-foreground tracking-tight transition-colors duration-500 group-hover:text-purple-500/70">Enfinity</span>
           </div>
-          <div className="flex gap-4">
+          <nav className="flex items-center gap-1 sm:gap-2">
             {isAuthenticated ? (
               <>
-                <Button variant="ghost" onClick={handleDashboardClick}>
+                <Button 
+                  variant="ghost" 
+                  onClick={handleDashboardClick} 
+                  className="text-sm sm:text-base px-3 sm:px-4 transition-all duration-300 hover:bg-purple-500/8 hover:text-purple-600 focus-visible:ring-purple-500/30"
+                >
                   Dashboard
                 </Button>
-                <Button variant="ghost" onClick={() => onSignOut?.()}>
+                <Button 
+                  variant="outline" 
+                  onClick={() => onSignOut?.()} 
+                  className="text-sm sm:text-base px-3 sm:px-4 border-border/40 transition-all duration-300 hover:bg-red-500/5 hover:border-red-400/25 hover:text-red-600 focus-visible:ring-red-500/30"
+                >
                   Sign Out
                 </Button>
               </>
             ) : (
               <>
-                <Button variant="ghost" onClick={() => router.push('/sign-in')}>
+                <Button 
+                  variant="ghost" 
+                  onClick={() => router.push('/sign-in')} 
+                  className="text-sm sm:text-base px-3 sm:px-4 transition-all duration-300 hover:bg-slate-200/5 hover:text-purple-600 focus-visible:ring-purple-500/30"
+                >
                   Sign In
                 </Button>
-                <Button onClick={() => router.push('/sign-in?mode=signup')}>
+                <Button 
+                  onClick={() => router.push('/sign-in?mode=signup')}
+                  className="text-sm sm:text-base px-3 sm:px-4 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-650 hover:to-purple-750 text-white shadow-sm shadow-purple-500/15 transition-all duration-300 hover:shadow-md hover:shadow-purple-500/25 focus-visible:ring-purple-400/50"
+                >
                   Get Started
                 </Button>
               </>
             )}
-          </div>
+          </nav>
         </div>
       </header>
 
@@ -259,12 +274,6 @@ export default function LandingPage({
               </div>
             </div>
             <div className="space-y-8">
-              {isAuthenticated && (
-                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/15 backdrop-blur-md border border-white/30 text-sm font-medium mb-2 text-white/95">
-                  <Sparkles className="w-4 h-4 text-cyan-300" />
-                  <span>Welcome back{userName ? `, ${userName}` : ''}</span>
-                </div>
-              )}
               <h1 className="text-5xl md:text-7xl font-bold tracking-tighter leading-tight bg-gradient-to-r from-white via-purple-200 to-purple-300 bg-clip-text text-transparent">
                 {isAuthenticated ? 'Resume Your Reading Flow' : 'Read Smarter, Learn Faster'}
               </h1>
