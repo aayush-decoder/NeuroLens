@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { BookOpen, Mail, Lock, User, ArrowRight, Sparkles, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
@@ -14,6 +15,7 @@ type AuthPageProps = {
 };
 
 export default function AuthPage({ initialMode = 'login' }: AuthPageProps) {
+  const router = useRouter();
   const [mode, setMode] = useState<Mode>(initialMode);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -35,10 +37,13 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps) {
       if (mode === 'login') {
         const { error } = await signIn(email, password);
         if (error) throw error;
+        toast({ title: 'Welcome!', description: 'You have been signed in successfully.' });
+        router.push('/dashboard');
       } else if (mode === 'signup') {
         const { error } = await signUp(email, password, displayName);
         if (error) throw error;
-        toast({ title: 'Check your email', description: 'We sent you a verification link to complete your signup.' });
+        toast({ title: 'Account created!', description: 'Redirecting to dashboard...' });
+        router.push('/dashboard');
       } else {
         const { error } = await resetPassword(email);
         if (error) throw error;

@@ -73,7 +73,7 @@ export default function ReaderPage({ fileId }: ReaderPageProps) {
   }, []);
 
   if (!file) {
-    router.push('/');
+    router.push('/dashboard');
     return null;
   }
 
@@ -84,7 +84,7 @@ export default function ReaderPage({ fileId }: ReaderPageProps) {
         terms={sessionData.struggledTerms}
         paragraphs={sessionData.paragraphs}
         fileName={file.name}
-        onBack={() => router.push('/')}
+        onBack={() => router.push('/dashboard')}
       />
     );
   }
@@ -102,7 +102,7 @@ export default function ReaderPage({ fileId }: ReaderPageProps) {
       <ZeroChromeLayer
         fileName={file.name}
         progress={progress}
-        onBack={() => router.push('/')}
+        onBack={() => router.push('/dashboard')}
         onToggleCognates={() => setCognatesEnabled(!cognatesEnabled)}
         onEndSession={handleEndSession}
         cognatesEnabled={cognatesEnabled}

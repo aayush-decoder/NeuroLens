@@ -5,7 +5,19 @@ import { Button } from '@/components/ui/button';
 import { ArrowRight, Zap, Eye, BarChart3, BookOpen, Brain, Shield, Sparkles } from 'lucide-react';
 import { useEffect, useState, useRef } from 'react';
 
-export default function LandingPage() {
+type LandingPageProps = {
+  isAuthenticated?: boolean;
+  userName?: string;
+  onOpenDashboard?: () => void;
+  onSignOut?: () => Promise<void> | void;
+};
+
+export default function LandingPage({
+  isAuthenticated = false,
+  userName,
+  onOpenDashboard,
+  onSignOut,
+}: LandingPageProps) {
   const router = useRouter();
   const heroSectionRef = useRef<HTMLDivElement>(null);
   const [trails, setTrails] = useState<Array<{ 
@@ -136,6 +148,24 @@ export default function LandingPage() {
     },
   ];
 
+  const handleDashboardClick = () => {
+    if (onOpenDashboard) {
+      onOpenDashboard();
+      return;
+    }
+
+    router.push('/dashboard');
+  };
+
+  const handlePrimaryCta = () => {
+    if (isAuthenticated) {
+      handleDashboardClick();
+      return;
+    }
+
+    router.push('/sign-in?mode=signup');
+  };
+
   return (
     <div className="min-h-screen bg-background relative overflow-hidden">
       <div className="absolute -top-24 -left-24 w-80 h-80 rounded-full bg-primary/10 blur-3xl" />
@@ -151,12 +181,25 @@ export default function LandingPage() {
             <span className="text-lg font-bold">Enfinity</span>
           </div>
           <div className="flex gap-4">
-            <Button variant="ghost" onClick={() => router.push('/sign-in')}>
-              Sign In
-            </Button>
-            <Button onClick={() => router.push('/sign-in?mode=signup')}>
-              Get Started
-            </Button>
+            {isAuthenticated ? (
+              <>
+                <Button variant="ghost" onClick={handleDashboardClick}>
+                  Dashboard
+                </Button>
+                <Button variant="ghost" onClick={() => onSignOut?.()}>
+                  Sign Out
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button variant="ghost" onClick={() => router.push('/sign-in')}>
+                  Sign In
+                </Button>
+                <Button onClick={() => router.push('/sign-in?mode=signup')}>
+                  Get Started
+                </Button>
+              </>
+            )}
           </div>
         </div>
       </header>
@@ -216,37 +259,53 @@ export default function LandingPage() {
               </div>
             </div>
             <div className="space-y-8">
+              {isAuthenticated && (
+                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/15 backdrop-blur-md border border-white/30 text-sm font-medium mb-2 text-white/95">
+                  <Sparkles className="w-4 h-4 text-cyan-300" />
+                  <span>Welcome back{userName ? `, ${userName}` : ''}</span>
+                </div>
+              )}
               <h1 className="text-5xl md:text-7xl font-bold tracking-tighter leading-tight bg-gradient-to-r from-white via-purple-200 to-purple-300 bg-clip-text text-transparent">
-                Read Smarter, Learn Faster
+                {isAuthenticated ? 'Resume Your Reading Flow' : 'Read Smarter, Learn Faster'}
               </h1>
               <p className="text-lg md:text-2xl text-white/85 max-w-3xl mx-auto leading-relaxed">
-                Enfinity transforms how you read and learn. Intelligent analysis, eye-strain protection, and concept mapping in one focused workspace.
+                {isAuthenticated
+                  ? 'Pick up where you left off in your dashboard, with your documents, folders, and reading sessions ready to go.'
+                  : 'Enfinity transforms how you read and learn. Intelligent analysis, eye-strain protection, and concept mapping in one focused workspace.'}
               </p>
             </div>
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center mt-10">
               <Button
                 size="lg"
-                onClick={() => router.push('/sign-in?mode=signup')}
+                onClick={handlePrimaryCta}
                 className="gap-2 bg-gradient-to-r from-cyan-600 via-purple-600 to-pink-600 hover:from-cyan-700 hover:via-purple-700 hover:to-pink-700 text-white shadow-lg shadow-purple-500/50"
               >
-                Start Reading Free
+                {isAuthenticated ? 'Open Dashboard' : 'Start Reading Free'}
                 <ArrowRight className="w-4 h-4" />
               </Button>
               <Button
                 size="lg"
                 variant="outline"
                 onClick={() => {
+                  if (isAuthenticated) {
+                    onSignOut?.();
+                    return;
+                  }
+
                   document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' });
                 }}
                 className="border-white/40 bg-white/15 text-white hover:bg-white/25"
               >
-                Learn More
+                {isAuthenticated ? 'Sign Out' : 'Learn More'}
               </Button>
             </div>
 
             <div className="mt-16 flex flex-wrap items-center justify-center gap-3">
-              {['Zero-Chrome Reading', 'Adaptive Text', 'Eye-Strain Protection'].map((item) => (
+              {(isAuthenticated
+                ? ['Dashboard Ready', 'Saved Sessions', 'Personalized Reading']
+                : ['Zero-Chrome Reading', 'Adaptive Text', 'Eye-Strain Protection']
+              ).map((item) => (
                 <span key={item} className="px-3 py-1.5 rounded-full bg-white/15 backdrop-blur-md border border-white/30 text-xs font-medium text-white/90">
                   {item}
                 </span>
@@ -351,10 +410,10 @@ export default function LandingPage() {
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
                 <Button
                   size="lg"
-                  onClick={() => router.push('/sign-in?mode=signup')}
+                  onClick={handlePrimaryCta}
                   className="gap-2 bg-gradient-to-r from-primary to-primary/85 hover:from-primary/95 hover:to-primary/80 text-primary-foreground shadow-lg shadow-primary/20"
                 >
-                  Get Started for Free
+                  {isAuthenticated ? 'Open Dashboard' : 'Get Started for Free'}
                   <ArrowRight className="w-4 h-4" />
                 </Button>
               </div>

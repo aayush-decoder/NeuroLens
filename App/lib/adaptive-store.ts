@@ -36,6 +36,8 @@ export type ProfileData = {
   grade: string;
   preferredLanguage: string;
   darkMode: boolean;
+  backupReminders: boolean;
+  lastBackupAt: number | null;
   updatedAt: number;
 };
 
@@ -63,6 +65,8 @@ export const DEFAULT_PROFILE: ProfileData = {
   grade: 'Grade 10',
   preferredLanguage: 'Hindi',
   darkMode: false,
+  backupReminders: true,
+  lastBackupAt: null,
   updatedAt: Date.now(),
 };
 

@@ -27,7 +27,7 @@ export default function ResetPasswordPage() {
     // Mock password update
     console.log('Mock password update to:', password);
     toast({ title: 'Mock Password updated', description: 'In this pure Next.js version, no actual changes other than this toast occur.' });
-    router.push('/');
+    router.push('/sign-in');
     setLoading(false);
   };
 
