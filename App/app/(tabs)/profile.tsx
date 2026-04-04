@@ -24,6 +24,7 @@ import {
   saveProfile,
   type ProfileData,
 } from '@/lib/adaptive-store';
+import { getBackendBaseUrl, registerFromMobile } from '@/lib/backend-api';
 import { setPreferredColorScheme, useColorScheme } from '@/hooks/use-color-scheme';
 
 export default function ProfileScreen() {
@@ -33,6 +34,7 @@ export default function ProfileScreen() {
   const themeShift = useSharedValue(1);
   const [profile, setProfile] = useState<ProfileData>(DEFAULT_PROFILE);
   const [status, setStatus] = useState('');
+  const [registering, setRegistering] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -93,6 +95,31 @@ export default function ProfileScreen() {
     setStatus(`Theme switched to ${darkMode ? 'dark' : 'light'} mode.`);
   };
 
+  const connectBackendAccount = async () => {
+    const username = profile.name.trim().replace(/\s+/g, '_').toLowerCase() || `reader_${Date.now()}`;
+    const email = profile.email.trim().toLowerCase();
+
+    if (!email.includes('@')) {
+      setStatus('Enter a valid email to create backend account.');
+      return;
+    }
+
+    try {
+      setRegistering(true);
+      await registerFromMobile({
+        username,
+        email,
+        password: 'Reader@12345',
+      });
+      setStatus('Backend account connected.');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to connect backend account.';
+      setStatus(message);
+    } finally {
+      setRegistering(false);
+    }
+  };
+
   useEffect(() => {
     themeShift.value = withSequence(
       withTiming(0.9, { duration: 120, easing: Easing.out(Easing.quad) }),
@@ -108,7 +135,7 @@ export default function ProfileScreen() {
   return (
     <Animated.ScrollView
       style={[styles.page, isDark ? styles.pageDark : null, themeShiftStyle]}
-      contentContainerStyle={[styles.content, { paddingTop: Math.max(insets.top + 10, 28) }]}>
+      contentContainerStyle={[styles.content, { paddingTop: 14 }]}>
       <Animated.Text entering={FadeInUp.duration(360)} style={[styles.title, isDark ? styles.titleDark : null]}>Profile</Animated.Text>
       <Animated.Text entering={FadeInUp.duration(360).delay(60)} style={[styles.subtitle, isDark ? styles.subtitleDark : null]}>
         Update learner settings and manage cloud backup
@@ -123,6 +150,16 @@ export default function ProfileScreen() {
           style={[styles.input, isDark ? styles.inputDark : null]}
           placeholder="Name"
           placeholderTextColor={isDark ? '#7E8BA0' : '#718199'}
+        />
+
+        <TextInput
+          value={profile.email}
+          onChangeText={(email) => setProfile((prev) => ({ ...prev, email }))}
+          style={[styles.input, isDark ? styles.inputDark : null]}
+          placeholder="Email"
+          placeholderTextColor={isDark ? '#7E8BA0' : '#718199'}
+          autoCapitalize="none"
+          keyboardType="email-address"
         />
 
         <TextInput
@@ -154,6 +191,14 @@ export default function ProfileScreen() {
         <Pressable style={styles.primaryBtn} onPress={updateProfile}>
           <Text style={styles.primaryBtnText}>Save profile</Text>
         </Pressable>
+
+        <Pressable style={styles.secondaryBtn} onPress={connectBackendAccount} disabled={registering}>
+          <Text style={styles.secondaryBtnText}>{registering ? 'Connecting...' : 'Connect backend account'}</Text>
+        </Pressable>
+
+        <Text style={[styles.panelBody, isDark ? styles.panelBodyDark : null]}>
+          Backend URL: {getBackendBaseUrl()}
+        </Text>
       </Animated.View>
 
       <Animated.View entering={FadeInDown.duration(380).delay(180)} style={[styles.panel, isDark ? styles.panelDark : null]}>

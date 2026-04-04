@@ -25,6 +25,20 @@ In the output, you'll find options to open the app in a
 
 You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
 
+## Backend Connection
+
+The app can connect to the Next.js backend used by the `webapp` project.
+
+1. Set backend URL for Expo:
+
+   ```bash
+   EXPO_PUBLIC_BACKEND_URL=http://10.0.2.2:3000
+   ```
+
+2. Run the backend (`webapp`) and then run Expo.
+
+`10.0.2.2` is correct for Android emulator. For a real device, use your machine LAN IP.
+
 ## Get a fresh project
 
 When you're ready, run:

@@ -113,7 +113,7 @@ export default function HomeScreen() {
   return (
     <Animated.ScrollView
       style={[styles.page, isDark ? styles.pageDark : null, themeShiftStyle]}
-      contentContainerStyle={[styles.content, { paddingTop: Math.max(insets.top + 10, 26) }]}>
+      contentContainerStyle={[styles.content, { paddingTop: 14 }]}>
       <Animated.View style={[styles.bgOrbOne, isDark ? styles.bgOrbOneDark : null, orbStyle]} />
       <Animated.View style={[styles.bgOrbTwo, isDark ? styles.bgOrbTwoDark : null]} />
 

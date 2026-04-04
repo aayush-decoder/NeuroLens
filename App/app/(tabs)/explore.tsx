@@ -14,6 +14,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { countWords, loadDocuments, loadSession, type ReaderDocument, type ReaderSession } from '@/lib/adaptive-store';
+import { analyzeSession } from '@/lib/backend-api';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 export default function DashboardScreen() {
@@ -22,6 +23,7 @@ export default function DashboardScreen() {
   const themeShift = useSharedValue(1);
   const [session, setSession] = useState<ReaderSession | null>(null);
   const [docs, setDocs] = useState<ReaderDocument[]>([]);
+  const [analysisStatus, setAnalysisStatus] = useState<'idle' | 'running' | 'ready' | 'error'>('idle');
 
   useFocusEffect(
     useCallback(() => {
@@ -54,6 +56,48 @@ export default function DashboardScreen() {
     );
   }, [isDark, themeShift]);
 
+  useEffect(() => {
+    if (!session?.backendSessionId) {
+      return;
+    }
+
+    let active = true;
+    setAnalysisStatus('running');
+
+    void analyzeSession(session.backendSessionId)
+      .then((analysis) => {
+        if (!active) {
+          return;
+        }
+
+        setSession((prev) => {
+          if (!prev) {
+            return prev;
+          }
+
+          return {
+            ...prev,
+            conceptFriction: [
+              { concept: 'Vocabulary load', score: Math.min(1, analysis.paragraphScores.wordComplexity || prev.conceptFriction[0]?.score || 0.2) },
+              { concept: 'Inference depth', score: Math.min(1, analysis.paragraphScores.hesitation || prev.conceptFriction[1]?.score || 0.15) },
+              { concept: 'Retention', score: Math.min(1, analysis.paragraphScores.pauseDuration || prev.conceptFriction[2]?.score || 0.12) },
+            ],
+          };
+        });
+
+        setAnalysisStatus('ready');
+      })
+      .catch(() => {
+        if (active) {
+          setAnalysisStatus('error');
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [session?.backendSessionId]);
+
   const themeShiftStyle = useAnimatedStyle(() => ({
     opacity: 0.88 + themeShift.value * 0.12,
     transform: [{ scale: 0.99 + themeShift.value * 0.01 }],
@@ -62,13 +106,16 @@ export default function DashboardScreen() {
   return (
     <Animated.ScrollView
       style={[styles.page, isDark ? styles.pageDark : null, themeShiftStyle]}
-      contentContainerStyle={[styles.content, { paddingTop: Math.max(insets.top + 10, 28) }]}>
+      contentContainerStyle={[styles.content, { paddingTop: 14 }]}>
       <Animated.Text entering={FadeInUp.duration(360)} style={[styles.title, isDark ? styles.titleDark : null]}>
         Learning Dashboard
       </Animated.Text>
       <Animated.Text entering={FadeInUp.duration(360).delay(60)} style={[styles.subtitle, isDark ? styles.subtitleDark : null]}>
         Session telemetry, concept graph, and review signals
       </Animated.Text>
+      <Text style={[styles.subtitle, isDark ? styles.subtitleDark : null]}>
+        Backend analysis: {analysisStatus}
+      </Text>
 
       <View style={styles.grid}>
         {metrics.map((metric, index) => (
@@ -147,11 +194,11 @@ const styles = StyleSheet.create({
   metricCard: {
     width: '48%',
     borderRadius: 15,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#292A45',
     padding: 12,
   },
   metricCardDark: {
-    backgroundColor: '#1A2431',
+    backgroundColor: '#23263B',
   },
   metricLabel: {
     color: '#61728B',
@@ -163,7 +210,7 @@ const styles = StyleSheet.create({
   },
   metricValue: {
     marginTop: 6,
-    color: '#11203A',
+    color: '#F2F5FF',
     fontSize: 23,
     fontWeight: '800',
   },
