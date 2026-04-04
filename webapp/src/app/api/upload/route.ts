@@ -1,20 +1,21 @@
 import { NextResponse } from "next/server";
 import NextAuth from "next-auth";
+import { NextAuthConfig } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { prisma } from "@/lib/prisma";
 
-const { auth } = NextAuth(authOptions as any);
+const { auth } = NextAuth(authOptions as NextAuthConfig);
 
 export async function POST(request: Request) {
   try {
     const session = await auth();
 
-    if (!session || !session.user || !(session.user as any).id) {
+    if (!session || !session.user || !(session.user as { id?: string }).id) {
       return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
     }
 
-    const userId = (session.user as any).id;
+    const userId = (session.user as { id: string }).id;
 
     // Parse form data
     const formData = await request.formData();
@@ -81,8 +82,8 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true, url: s3Url });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Upload error:", error);
-    return NextResponse.json({ success: false, message: error.message }, { status: 500 });
+    return NextResponse.json({ success: false, message: (error as Error).message || "Unknown error" }, { status: 500 });
   }
 }
