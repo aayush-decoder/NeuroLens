@@ -1,21 +1,28 @@
 function initEyeStrain(overlay, column) {
-    const sessionStart = Date.now();
+    // Session start is set by persistence.js first; fall back to now
+    if (!window._arSessionStart) window._arSessionStart = Date.now();
 
-    const profiles = [
-        { maxMin: 15, bg: "#ffffff", fontWeight: "400", lineHeight: "1.6" },
-        { maxMin: 30, bg: "#fdf6e3", fontWeight: "400", lineHeight: "1.7" },
-        { maxMin: 60, bg: "#f5efe0", fontWeight: "300", lineHeight: "1.85" },
-        { maxMin: Infinity, bg: "#ede8d5", fontWeight: "300", lineHeight: "2.0" }
+    const phases = [
+        { maxMin: 15, cls: "ar-phase-1", lineHeight: "1.60", fontWeight: "400" },
+        { maxMin: 30, cls: "ar-phase-2", lineHeight: "1.72", fontWeight: "400" },
+        { maxMin: 60, cls: "ar-phase-3", lineHeight: "1.85", fontWeight: "300" },
+        { maxMin: 9999, cls: "ar-phase-4", lineHeight: "2.00", fontWeight: "300" }
     ];
 
-    function applyProfile() {
-        const elapsedMin = (Date.now() - sessionStart) / 60000;
-        const profile = profiles.find(p => elapsedMin < p.maxMin);
-        overlay.style.background = profile.bg;
-        column.style.fontWeight = profile.fontWeight;
-        column.style.lineHeight = profile.lineHeight;
+    function applyPhase() {
+        const mins = (Date.now() - window._arSessionStart) / 60000;
+        const phase = phases.find(p => mins < p.maxMin);
+
+        // Swap background phase class
+        phases.forEach(p => overlay.classList.remove(p.cls));
+        overlay.classList.add(phase.cls);
+
+        // Smoothly adjust typography on the column
+        column.style.lineHeight = phase.lineHeight;
+        column.style.fontWeight = phase.fontWeight;
     }
 
-    applyProfile();
-    setInterval(applyProfile, 5 * 60 * 1000); // check every 5 minutes
+    applyPhase();
+    // Check every 5 minutes; CSS transitions do the smooth blending
+    setInterval(applyPhase, 5 * 60 * 1000);
 }

@@ -1,5 +1,5 @@
-const STORAGE_KEY = "ar_state_" + location.href;
-let _persistDebounce;
+var STORAGE_KEY = "ar_state_" + location.href;
+var _persistDebounce;
 
 function savePersistence() {
     clearTimeout(_persistDebounce);
@@ -22,7 +22,11 @@ function savePersistence() {
             sessionStart: window._arSessionStart || Date.now()
         };
 
-        chrome.storage.local.set({ [STORAGE_KEY]: state });
+        chrome.storage.local.set({ [STORAGE_KEY]: state }, () => {
+            if (chrome.runtime.lastError) {
+                console.error("Storage Error:", chrome.runtime.lastError);
+            }
+        });
     }, 1000);
 }
 

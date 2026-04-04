@@ -1,94 +1,275 @@
+/* ── Core overlay ── */
 #ar-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 2147483647;
-  background: #ffffff;
-  overflow-y: auto;
-  font-family: Georgia, serif;
-  font-size: 19px;
-  line-height: 1.6;
-  color: #1a1a1a;
-  transition: background 1s ease, color 1s ease;
+    position: fixed;
+    inset: 0;
+    z-index: 2147483640;
+    overflow-y: auto;
+    font-family: Georgia, serif;
+    font-size: 19px;
+    line-height: 1.6;
+    color: #1a1a1a;
+    background: #ffffff;
+    transition: background 1.2s ease, opacity 0.3s ease;
 }
 
 #ar-column {
-  max-width: 680px;
-  margin: 0 auto;
-  padding: 80px 40px 160px;
+    max-width: 680px;
+    margin: 0 auto;
+    padding: 72px 40px 160px;
 }
 
 #ar-column p {
-  margin: 0 0 1.6em;
-  transition: line-height 1s ease, font-weight 1s ease;
+    margin: 0 0 1.6em;
+    transition: line-height 1.2s ease;
 }
 
+/* Adapted paragraph: subtle left accent, no jarring color */
 #ar-column p.ar-adapted {
-  border-left: 3px solid #4CAF50;
-  padding-left: 12px;
-  margin-left: -15px;
+    border-left: 3px solid #4CAF50;
+    padding-left: 14px;
+    margin-left: -17px;
 }
 
+/* Inline definition spans injected by adapter */
+.ar-def {
+    color: #2e7d32;
+    font-style: italic;
+    font-size: 0.88em;
+    cursor: help;
+    border-bottom: 1px dotted #4CAF50;
+}
+
+/* Acronym expansions */
+.ar-acronym {
+    color: #1565c0;
+    font-size: 0.88em;
+    font-style: italic;
+}
+
+/* ── Toolbar (top-right, auto-hides) ── */
 #ar-toolbar {
-  position: fixed;
-  top: 16px;
-  right: 20px;
-  display: flex;
-  gap: 8px;
-  z-index: 2147483648;
-  opacity: 1;
-  transition: opacity 0.4s ease;
+    position: fixed;
+    top: 14px;
+    right: 18px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    z-index: 2147483648;
+    opacity: 1;
+    transition: opacity 0.5s ease;
 }
 
-#ar-toolbar.hidden { opacity: 0; pointer-events: none; }
+#ar-toolbar.ar-hidden {
+    opacity: 0;
+    pointer-events: none;
+}
 
 .ar-btn {
-  background: rgba(0,0,0,0.07);
-  border: none;
-  border-radius: 8px;
-  padding: 7px 12px;
-  font-size: 12px;
-  cursor: pointer;
-  color: #333;
+    background: rgba(30, 30, 30, 0.08);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    border-radius: 8px;
+    padding: 6px 13px;
+    font-size: 12px;
+    font-family: sans-serif;
+    cursor: pointer;
+    color: #333;
+    white-space: nowrap;
+    transition: background 0.15s;
 }
-.ar-btn:hover { background: rgba(0,0,0,0.14); }
 
+.ar-btn:hover {
+    background: rgba(30, 30, 30, 0.16);
+}
+
+/* Peek button has a distinct look */
+#ar-peek-btn {
+    background: rgba(255, 255, 255, 0.9);
+    border: 1px solid rgba(0, 0, 0, 0.18);
+    font-weight: 600;
+}
+
+/* ── Peek bar (collapsed state — page visible underneath) ── */
+#ar-peek-bar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 48px;
+    z-index: 2147483647;
+    background: rgba(255, 255, 255, 0.97);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+    display: none;
+    /* shown only in peek mode */
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 20px;
+    font-family: sans-serif;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.07);
+}
+
+#ar-peek-bar.ar-visible {
+    display: flex;
+}
+
+#ar-peek-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: #1a1a1a;
+    max-width: 400px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+#ar-peek-progress {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 12px;
+    color: #666;
+}
+
+#ar-peek-progressbar {
+    width: 120px;
+    height: 4px;
+    background: #e0e0e0;
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+#ar-peek-progressfill {
+    height: 100%;
+    background: #4CAF50;
+    border-radius: 2px;
+    transition: width 0.3s ease;
+}
+
+#ar-resume-btn {
+    background: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 7px;
+    padding: 7px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    font-family: sans-serif;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+#ar-resume-btn:hover {
+    background: #43A047;
+}
+
+#ar-end-peek-btn {
+    background: none;
+    border: none;
+    color: #999;
+    font-size: 18px;
+    cursor: pointer;
+    padding: 4px 8px;
+    line-height: 1;
+}
+
+#ar-end-peek-btn:hover {
+    color: #333;
+}
+
+/* ── Dropzone ── */
 #ar-dropzone {
-  position: fixed;
-  inset: 0;
-  z-index: 2147483649;
-  background: rgba(255,255,255,0.96);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: sans-serif;
-  font-size: 18px;
-  color: #555;
-  display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 2147483649;
+    background: rgba(255, 255, 255, 0.96);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    font-family: sans-serif;
+    font-size: 18px;
+    color: #555;
+    border: 3px dashed #ccc;
+    pointer-events: none;
 }
 
+#ar-dropzone.ar-active {
+    display: flex;
+    pointer-events: all;
+}
+
+/* ── Review modal ── */
 #ar-review-modal {
-  position: fixed;
-  inset: 0;
-  z-index: 2147483650;
-  background: rgba(0,0,0,0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 2147483650;
+    background: rgba(0, 0, 0, 0.5);
+    display: none;
+    align-items: center;
+    justify-content: center;
+}
+
+#ar-review-modal.ar-visible {
+    display: flex;
 }
 
 #ar-review-inner {
-  background: #fff;
-  border-radius: 12px;
-  padding: 32px;
-  max-width: 560px;
-  width: 90%;
-  max-height: 80vh;
-  overflow-y: auto;
+    background: #fff;
+    border-radius: 14px;
+    padding: 32px;
+    max-width: 560px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+    font-family: sans-serif;
 }
 
-#ar-review-inner h2 { margin: 0 0 16px; font-size: 18px; font-weight: 500; }
+#ar-review-inner h2 {
+    margin: 0 0 18px;
+    font-size: 18px;
+    font-weight: 600;
+}
 
-#ar-review-inner table { width: 100%; border-collapse: collapse; font-size: 14px; }
-#ar-review-inner td { padding: 8px 12px; border-bottom: 1px solid #eee; vertical-align: top; }
-#ar-review-inner td:first-child { font-weight: 500; width: 35%; }
+#ar-review-inner table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+}
+
+#ar-review-inner td {
+    padding: 9px 12px;
+    border-bottom: 1px solid #f0f0f0;
+    vertical-align: top;
+}
+
+#ar-review-inner td:first-child {
+    font-weight: 600;
+    width: 32%;
+    color: #2e7d32;
+}
+
+#ar-review-inner .ar-modal-close {
+    float: right;
+    background: none;
+    border: none;
+    font-size: 20px;
+    cursor: pointer;
+    color: #999;
+    margin: -8px -8px 0 0;
+}
+
+/* ── Eye-strain transition classes applied by JS ── */
+#ar-overlay.ar-phase-1 {
+    background: #ffffff;
+}
+
+#ar-overlay.ar-phase-2 {
+    background: #fdf6e3;
+}
+
+#ar-overlay.ar-phase-3 {
+    background: #f5efe0;
+}
+
+#ar-overlay.ar-phase-4 {
+    background: #ede8d5;
+}
