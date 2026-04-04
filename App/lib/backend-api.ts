@@ -69,8 +69,25 @@ export type AnalyzeResponse = {
   strugglingParagraphs: number[];
 };
 
+export type FatigueResponse = {
+  level: 'LOW' | 'MEDIUM' | 'HIGH' | 'EXTREME';
+  settings: {
+    theme: 'light' | 'soft' | 'dark';
+    fontWeight: number;
+    lineHeight: number;
+    contrast: 'normal' | 'medium' | 'high' | 'very-high';
+  };
+};
+
 export async function analyzeSession(sessionId: string): Promise<AnalyzeResponse> {
   return apiRequest<AnalyzeResponse>('/api/analyze', {
+    method: 'POST',
+    body: { sessionId },
+  });
+}
+
+export async function getFatigueState(sessionId: string): Promise<FatigueResponse> {
+  return apiRequest<FatigueResponse>('/api/fatigue', {
     method: 'POST',
     body: { sessionId },
   });
@@ -94,4 +111,30 @@ export async function registerFromMobile(input: {
     method: 'POST',
     body: input,
   });
+}
+
+export type MobileAuthUser = {
+  id: string;
+  username: string;
+  email: string;
+};
+
+export async function loginFromMobile(input: {
+  email: string;
+  password: string;
+}): Promise<MobileAuthUser> {
+  const response = await apiRequest<{ user: MobileAuthUser }>('/api/auth/login', {
+    method: 'POST',
+    body: input,
+  });
+
+  return response.user;
+}
+
+export async function signupFromMobile(input: {
+  username: string;
+  email: string;
+  password: string;
+}): Promise<void> {
+  await registerFromMobile(input);
 }

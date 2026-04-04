@@ -7,8 +7,9 @@ export interface EyeStrainState {
 const MAX_SESSION_MINUTES = 60;
 const UPDATE_INTERVAL = 30000; // 30 seconds
 
-export function createEyeStrainState(): EyeStrainState {
-  return { sessionStartTime: Date.now(), level: 0 };
+export function createEyeStrainState(sessionStartTime?: number): EyeStrainState {
+  const startTime = sessionStartTime ?? Date.now();
+  return { sessionStartTime: startTime, level: 0 };
 }
 
 export function updateEyeStrainLevel(state: EyeStrainState): EyeStrainState {

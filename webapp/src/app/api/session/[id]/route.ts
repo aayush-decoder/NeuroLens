@@ -11,8 +11,13 @@ export async function GET(
       where: { id },
       include: {
         telemetryEvents: true,
+        content: true,
       },
     });
+
+    if (!session) {
+      return NextResponse.json({ error: "Session not found" }, { status: 404 });
+    }
 
     return NextResponse.json(session);
   } catch (error) {

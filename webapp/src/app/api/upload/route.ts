@@ -7,14 +7,6 @@ import { prisma } from "@/lib/prisma";
 
 const { auth } = NextAuth(authOptions as NextAuthConfig);
 
-const s3Client = new S3Client({
-  region: process.env.AWS_REGION || "us-east-1",
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESSS_KEY!,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
-  },
-});
-
 export async function POST(request: Request) {
   try {
     const session = await auth();
@@ -37,9 +29,31 @@ export async function POST(request: Request) {
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
+    const region = process.env.AWS_REGION || "us-east-1";
+    const bucketName = process.env.AWS_S3_BUCKET_NAME;
+    const accessKeyId = process.env.AWS_ACCESS_KEY_ID || process.env.AWS_ACCESSS_KEY;
+    const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY || process.env.AWS_SECRET_KEY;
+
+    if (!bucketName || !accessKeyId || !secretAccessKey) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "S3 is not configured. Set AWS_S3_BUCKET_NAME, AWS_ACCESS_KEY_ID (or AWS_ACCESSS_KEY), and AWS_SECRET_ACCESS_KEY (or AWS_SECRET_KEY).",
+        },
+        { status: 500 },
+      );
+    }
+
+    const s3Client = new S3Client({
+      region,
+      credentials: {
+        accessKeyId,
+        secretAccessKey,
+      },
+    });
+
     // Prepare S3 Key
     // user/<unique userid>/path/to/file.../filename.pdf
-    const bucketName = process.env.AWS_S3_BUCKET_NAME!;
     // sanitize pathParam format just to be safe
     const cleanPath = pathParam.replace(/^\/+|\/+$/g, '');
     const key = `user/${userId}/${cleanPath}/${file.name}`;
@@ -55,7 +69,7 @@ export async function POST(request: Request) {
     await s3Client.send(command);
 
     // Compute accessible URI
-    const s3Url = `https://${bucketName}.s3.${process.env.AWS_REGION || "us-east-1"}.amazonaws.com/${key}`;
+    const s3Url = `https://${bucketName}.s3.${region}.amazonaws.com/${key}`;
 
     // Store in Postgresql DB
     await prisma.userFile.create({

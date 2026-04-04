@@ -1,4 +1,5 @@
 import * as WebBrowser from 'expo-web-browser';
+import { router } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { useCallback, useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
@@ -25,6 +26,7 @@ import {
   type ProfileData,
 } from '@/lib/adaptive-store';
 import { getBackendBaseUrl, registerFromMobile } from '@/lib/backend-api';
+import { clearAuthSession } from '@/lib/auth-store';
 import { setPreferredColorScheme, useColorScheme } from '@/hooks/use-color-scheme';
 
 export default function ProfileScreen() {
@@ -120,6 +122,11 @@ export default function ProfileScreen() {
     }
   };
 
+  const logout = async () => {
+    await clearAuthSession();
+    router.replace('/login');
+  };
+
   useEffect(() => {
     themeShift.value = withSequence(
       withTiming(0.9, { duration: 120, easing: Easing.out(Easing.quad) }),
@@ -177,6 +184,9 @@ export default function ProfileScreen() {
           placeholder="Preferred language"
           placeholderTextColor={isDark ? '#7E8BA0' : '#718199'}
         />
+        <Text style={[styles.panelBody, isDark ? styles.panelBodyDark : null]}>
+          Multilingual cognates support: Hindi, Spanish, French, Telugu.
+        </Text>
 
         <View style={styles.switchRow}>
           <Text style={[styles.switchLabel, isDark ? styles.switchLabelDark : null]}>Dark mode</Text>
@@ -233,6 +243,9 @@ export default function ProfileScreen() {
         <Text style={[styles.panelBody, isDark ? styles.panelBodyDark : null]}>
           Google sign-in and additional providers will be added in the final completion stage, as requested.
         </Text>
+        <Pressable style={styles.secondaryBtn} onPress={logout}>
+          <Text style={styles.secondaryBtnText}>Logout</Text>
+        </Pressable>
       </Animated.View>
 
       {status ? <Text style={[styles.status, isDark ? styles.statusDark : null]}>{status}</Text> : null}
