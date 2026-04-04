@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   BookOpen, FolderOpen, Plus, Home, User, LogOut, Moon, Sun,
-  ChevronRight, Trash2, Settings
+  ChevronRight, Trash2, Settings, FilePlus
 } from 'lucide-react';
 import {
   Sidebar,
@@ -12,6 +12,7 @@ import {
   SidebarGroupContent,
   SidebarGroupLabel,
   SidebarMenu,
+  SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuAction,
   SidebarMenuItem,
@@ -23,17 +24,20 @@ import { useFileStore } from '@/store/fileStore';
 import { useAuth } from '@/hooks/useAuth';
 import { useProfile } from '@/hooks/useProfile';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { parseDocument } from '@/engines/documentParser';
 
 export function AppSidebar() {
   const router = useRouter();
   const pathname = usePathname();
   const { state } = useSidebar();
   const collapsed = state === 'collapsed';
-  const { files, folders, theme, addFolder, removeFolder, setTheme } = useFileStore();
+  const { files, folders, theme, addFolder, addFile, removeFolder, setTheme } = useFileStore();
   const { user, signOut } = useAuth();
   const { profile } = useProfile();
   const [showNewFolder, setShowNewFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
+  const [uploadFolderId, setUploadFolderId] = useState<string | null | undefined>(undefined);
+  const folderUploadInputRef = useRef<HTMLInputElement>(null);
 
   const handleShowAllFiles = () => {
     router.push('/');
@@ -53,6 +57,33 @@ export function AppSidebar() {
   };
 
   const isActive = (path: string) => pathname === path;
+
+  const handleFolderAddFiles = (folderId: string | null) => {
+    setUploadFolderId(folderId);
+    folderUploadInputRef.current?.click();
+  };
+
+  const handleFolderFileInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (uploadFolderId === undefined || !e.target.files?.length) return;
+
+    const validFiles = Array.from(e.target.files).filter((f) => f.name.endsWith('.txt') || f.name.endsWith('.md'));
+    await Promise.all(
+      validFiles.map(async (file) => {
+        const text = await file.text();
+        const paragraphs = parseDocument(text, file.name);
+        addFile({
+          id: crypto.randomUUID(),
+          name: file.name.replace(/\.(txt|md)$/i, ''),
+          content: paragraphs.join('\n\n'),
+          folderId: uploadFolderId,
+          createdAt: Date.now(),
+        });
+      }),
+    );
+
+    e.target.value = '';
+    setUploadFolderId(null);
+  };
 
   const initials = profile?.display_name
     ? profile.display_name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
@@ -79,6 +110,15 @@ export function AppSidebar() {
       </SidebarHeader>
 
       <SidebarContent>
+        <input
+          ref={folderUploadInputRef}
+          type="file"
+          accept=".txt,.md"
+          multiple
+          className="hidden"
+          onChange={handleFolderFileInputChange}
+        />
+
         {/* Navigation */}
         <SidebarGroup>
           <SidebarGroupContent>
@@ -124,40 +164,67 @@ export function AppSidebar() {
               <SidebarMenuItem>
                 <SidebarMenuButton
                   onClick={handleShowAllFiles}
-                  className="text-muted-foreground"
+                  className="text-muted-foreground pr-8"
                 >
                   <FolderOpen className="w-4 h-4" />
                   {!collapsed && (
-                    <div className="flex items-center justify-between flex-1">
+                    <div className="flex items-center flex-1">
                       <span>All Files</span>
-                      <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded-full">{files.length}</span>
                     </div>
                   )}
                 </SidebarMenuButton>
+                {!collapsed && (
+                  <>
+                    <SidebarMenuBadge className="right-1 h-auto min-w-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] leading-none text-muted-foreground transition-opacity group-hover/menu-item:opacity-0">
+                      {files.length}
+                    </SidebarMenuBadge>
+                    <SidebarMenuAction
+                      onClick={() => handleFolderAddFiles(null)}
+                      showOnHover
+                      aria-label="Add files to All Files"
+                      title="Add files to All Files"
+                    >
+                      <FilePlus className="w-3 h-3" />
+                    </SidebarMenuAction>
+                  </>
+                )}
               </SidebarMenuItem>
 
               {folders.map(folder => {
                 const count = files.filter(f => f.folderId === folder.id).length;
                 return (
                   <SidebarMenuItem key={folder.id}>
-                    <SidebarMenuButton className="group/folder text-muted-foreground pr-8">
+                    <SidebarMenuButton className="group/folder text-muted-foreground pr-14">
                       <FolderOpen className="w-4 h-4" style={{ color: folder.color || undefined }} />
                       {!collapsed && (
-                        <div className="flex items-center justify-between flex-1">
-                          <span>{folder.name}</span>
-                          <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded-full">{count}</span>
+                        <div className="flex items-center flex-1 min-w-0">
+                          <span className="truncate">{folder.name}</span>
                         </div>
                       )}
                     </SidebarMenuButton>
                     {!collapsed && (
-                      <SidebarMenuAction
-                        onClick={() => removeFolder(folder.id)}
-                        showOnHover
-                        aria-label={`Delete folder ${folder.name}`}
-                        title={`Delete folder ${folder.name}`}
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </SidebarMenuAction>
+                      <>
+                        <SidebarMenuBadge className="right-1 h-auto min-w-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] leading-none text-muted-foreground transition-opacity group-hover/menu-item:opacity-0">
+                          {count}
+                        </SidebarMenuBadge>
+                        <SidebarMenuAction
+                          onClick={() => handleFolderAddFiles(folder.id)}
+                          showOnHover
+                          className="right-7"
+                          aria-label={`Add files to folder ${folder.name}`}
+                          title={`Add files to folder ${folder.name}`}
+                        >
+                          <FilePlus className="w-3 h-3" />
+                        </SidebarMenuAction>
+                        <SidebarMenuAction
+                          onClick={() => removeFolder(folder.id)}
+                          showOnHover
+                          aria-label={`Delete folder ${folder.name}`}
+                          title={`Delete folder ${folder.name}`}
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </SidebarMenuAction>
+                      </>
                     )}
                   </SidebarMenuItem>
                 );
