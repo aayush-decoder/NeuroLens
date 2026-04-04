@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { ArrowRight, Zap, Eye, BarChart3, BookOpen, Brain, Shield, Sparkles, Moon, Sun } from 'lucide-react';
 import { useEffect, useState, useRef } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
+import HyperTextParagraph from '@/components/ui/hyper-text-with-decryption';
 
 type LandingPageProps = {
   isAuthenticated?: boolean;
@@ -167,7 +168,7 @@ export default function LandingPage({
   };
 
   return (
-    <div className="min-h-screen bg-white dark:bg-gradient-to-b dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 dark:relative dark:overflow-hidden transition-colors duration-300">
+    <div className="min-h-screen bg-white dark:bg-gradient-to-b dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 dark:relative transition-colors duration-300 overflow-hidden">
       {/* Light mode background */}
       <div className="absolute -top-24 -left-24 w-80 h-80 rounded-full bg-teal-100/40 blur-3xl dark:bg-teal-600/15 dark:hidden" />
       <div className="absolute -bottom-24 -right-24 w-96 h-96 rounded-full bg-indigo-100/40 blur-3xl dark:bg-indigo-600/15 dark:hidden" />
@@ -219,8 +220,9 @@ export default function LandingPage({
                   Sign In
                 </Button>
                 <Button
+                  variant="ghost"
                   onClick={() => router.push('/sign-in?mode=signup')}
-                  className="text-sm sm:text-base px-3 sm:px-4 bg-gradient-to-r from-teal-600 via-pink-600 to-indigo-600 hover:from-teal-500 hover:via-pink-500 hover:to-indigo-500 text-white shadow-md shadow-pink-500/20 transition-all duration-300 hover:shadow-lg hover:shadow-pink-500/30 focus-visible:ring-teal-400/30"
+                  className="text-sm sm:text-base px-3 sm:px-4 text-gray-700 dark:text-slate-300 transition-all duration-300 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 hover:text-indigo-700 dark:hover:text-indigo-300 focus-visible:ring-indigo-400/30"
                 >
                   Get Started
                 </Button>
@@ -358,7 +360,7 @@ export default function LandingPage({
       <section id="features" className="py-20 md:py-28 relative z-10 bg-gray-50 dark:bg-gradient-to-b dark:from-slate-900 dark:via-slate-900 dark:to-slate-950 transition-colors duration-300">
         <div className="container">
           <div className="mx-auto max-w-2xl text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-teal-600 via-pink-600 to-indigo-600 dark:from-teal-300 dark:via-pink-300 dark:to-indigo-300 bg-clip-text text-transparent mb-4">Powerful Features</h2>
+            <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">Powerful Features</h2>
             <p className="text-lg text-gray-600 dark:text-slate-400">
               Everything you need to read smarter and learn faster.
             </p>
@@ -401,7 +403,7 @@ export default function LandingPage({
       <section className="py-20 md:py-28 relative z-10 bg-white dark:bg-gradient-to-b dark:from-slate-950 dark:via-slate-900 dark:to-slate-900 transition-colors duration-300">
         <div className="container">
           <div className="mx-auto max-w-2xl text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-teal-600 via-pink-600 to-yellow-600 dark:from-cyan-300 dark:via-pink-300 dark:to-yellow-300 bg-clip-text text-transparent mb-4">How It Works</h2>
+            <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">How It Works</h2>
             <p className="text-lg text-gray-600 dark:text-slate-400">
               Get started in 4 simple steps.
             </p>
@@ -437,6 +439,40 @@ export default function LandingPage({
                 </div>
               );
             })}
+          </div>
+        </div>
+      </section>
+
+      {/* Interactive Features Section with HyperText */}
+      <section className="py-20 md:py-28 relative z-10 bg-gradient-to-b from-gray-50 to-white dark:from-slate-950 dark:via-slate-900 dark:to-slate-900 transition-colors duration-300">
+        <div className="container">
+          <div className="mx-auto max-w-3xl">
+            {/* Header */}
+            <div className="text-center mb-16">
+              <h2 className="text-3xl md:text-4xl font-bold mb-4 text-gray-900 dark:text-white">
+                Why Choose NeuroLens?
+              </h2>
+            </div>
+
+            {/* Card with HyperText */}
+            <div className="bg-white dark:bg-slate-800/40 dark:backdrop-blur-md rounded-2xl p-8 md:p-12 border border-gray-200 dark:border-slate-700/60 shadow-lg dark:shadow-black/20 relative overflow-hidden group">
+              {/* Background accent */}
+              <div className="absolute -top-20 -right-20 w-40 h-40 bg-gradient-to-br from-teal-200 to-cyan-200 dark:from-teal-600/20 dark:to-cyan-600/20 rounded-full blur-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+              <div className="absolute -bottom-20 -left-20 w-40 h-40 bg-gradient-to-tr from-pink-200 to-rose-200 dark:from-pink-600/20 dark:to-rose-600/20 rounded-full blur-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+
+              <div className="relative z-10">
+                <HyperTextParagraph
+                  text="NeuroLens combines intelligent document parsing with adaptive eye-strain reduction technologies. Our advanced algorithms optimize every aspect of your reading experience, from contrast management to personalized formatting. Decrypt our key benefits by hovering over highlighted keywords to see how we transform digital reading into a seamless, comfortable journey."
+                  highlightWords={['intelligent', 'adaptive', 'algorithms', 'optimize', 'personalized', 'seamless']}
+                  className="text-lg md:text-xl text-gray-700 dark:text-slate-200 leading-relaxed"
+                />
+              </div>
+
+              {/* Bottom accent line */}
+              <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-teal-400 to-transparent opacity-50" />
+            </div>
+
+
           </div>
         </div>
       </section>
