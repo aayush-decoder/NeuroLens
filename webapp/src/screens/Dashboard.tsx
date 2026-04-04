@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ArrowRight, BookOpen, Sparkles, FileText, LibraryBig, UploadCloud, ChevronLeft } from 'lucide-react';
+import { ArrowRight, BookOpen, FileText, FolderOpen, LibraryBig, UploadCloud, ChevronLeft } from 'lucide-react';
 import { useFileStore } from '@/store/fileStore';
 import { useAuth } from '@/hooks/useAuth';
 import UploadDropzone from '@/components/FileSystem/UploadDropzone';
@@ -32,9 +32,9 @@ export default function Dashboard() {
       <div className="px-4 sm:px-6 py-6 max-w-6xl mx-auto space-y-8">
         {/* Decorative gradient blobs */}
         <div className="fixed inset-0 -z-10 pointer-events-none">
-          <div className="absolute -top-32 -left-32 h-96 w-96 rounded-full bg-primary/8 blur-3xl" />
-          <div className="absolute -bottom-40 -right-40 h-96 w-96 rounded-full bg-accent/8 blur-3xl" />
-          <div className="absolute top-1/3 left-1/2 h-80 w-80 rounded-full bg-secondary/5 blur-3xl" />
+          <div className="absolute -top-32 -left-32 h-96 w-96 rounded-full bg-blue-500/8 blur-3xl" />
+          <div className="absolute -bottom-40 -right-40 h-96 w-96 rounded-full bg-emerald-500/8 blur-3xl" />
+          <div className="absolute top-1/3 left-1/2 h-80 w-80 rounded-full bg-orange-500/6 blur-3xl" />
         </div>
 
         {!selectedFolder && (
@@ -95,7 +95,7 @@ export default function Dashboard() {
               className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
             >
               {/* Library Card */}
-              <motion.div whileHover={{ y: -4 }} className="stat-card gradient-violet text-primary-foreground shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 p-6">
+              <motion.div whileHover={{ y: -4 }} className="stat-card gradient-blue text-primary-foreground shadow-lg shadow-blue-500/20 hover:shadow-xl hover:shadow-blue-500/30 p-6">
                 <div className="relative z-10">
                   <div className="flex items-center gap-2 mb-3">
                     <LibraryBig className="w-5 h-5 opacity-90" />
@@ -115,6 +115,18 @@ export default function Dashboard() {
                   </div>
                   <p className="text-5xl font-bold mb-2">{totalWords.toLocaleString()}</p>
                   <p className="text-xs opacity-75 font-medium">Total loaded</p>
+                </div>
+              </motion.div>
+
+              {/* Folders Card */}
+              <motion.div whileHover={{ y: -4 }} className="stat-card gradient-emerald text-primary-foreground shadow-lg shadow-emerald-500/20 hover:shadow-xl hover:shadow-emerald-500/30 p-6">
+                <div className="relative z-10">
+                  <div className="flex items-center gap-2 mb-3">
+                    <FolderOpen className="w-5 h-5 opacity-90" />
+                    <span className="text-xs font-semibold opacity-90 uppercase tracking-wider">Folders</span>
+                  </div>
+                  <p className="text-5xl font-bold mb-2">{folders.length}</p>
+                  <p className="text-xs opacity-75 font-medium">Collections</p>
                 </div>
               </motion.div>
 
