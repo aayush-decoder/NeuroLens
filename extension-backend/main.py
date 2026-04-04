@@ -1,20 +1,31 @@
 import hashlib
-import uuid
-from datetime import datetime
+import json
+import logging
+import asyncio
+from datetime import datetime, UTC
 from typing import Optional
-import httpx
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
 import os
 
+from google import genai
+from google.genai import types
+from google.api_core.exceptions import ResourceExhausted, ServiceUnavailable, GoogleAPIError
+
 load_dotenv()
 
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+logger = logging.getLogger("adaptive_reader")
+logging.basicConfig(level=logging.INFO)
 
-app = FastAPI(title="Adaptive Reader API", version="1.0.0")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+GEMINI_MODEL = "gemini-2.0-flash"
+
+_genai_client = genai.Client(api_key=GEMINI_API_KEY)
+
+app = FastAPI(title="Adaptive Reader API", version="2.0.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -24,21 +35,60 @@ app.add_middleware(
 )
 
 # ─── In-memory stores ────────────────────────────────────────────────────────
-adapt_cache: dict[str, dict] = {}   # sha256(paragraph+language) → response
-sessions: dict[str, dict] = {}       # session_id → session data
-telemetry_log: list[dict] = []       # append-only event log
-
+adapt_cache: dict[str, dict] = {}
+sessions: dict[str, dict] = {}
+telemetry_log: list[dict] = []
 
 # ─── Gemini helper ───────────────────────────────────────────────────────────
+_RETRYABLE = (ResourceExhausted, ServiceUnavailable)
+_MAX_RETRIES = 3
+_BACKOFF_BASE = 2.0  # seconds
+
+
 async def call_gemini(prompt: str) -> str:
-    async with httpx.AsyncClient(timeout=30) as client:
-        res = await client.post(
-            GEMINI_URL,
-            json={"contents": [{"parts": [{"text": prompt}]}]},
-        )
-        res.raise_for_status()
-        data = res.json()
-        return data["candidates"][0]["content"]["parts"][0]["text"].strip()
+    """
+    Call Gemini 2.0 Flash via the google-genai SDK.
+    Retries up to _MAX_RETRIES times on rate-limit / transient errors
+    with exponential backoff.
+    """
+    last_exc: Exception | None = None
+
+    for attempt in range(_MAX_RETRIES):
+        try:
+            response = await asyncio.to_thread(
+                _genai_client.models.generate_content,
+                model=GEMINI_MODEL,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    temperature=0.2,
+                    max_output_tokens=2048,
+                ),
+            )
+            text = response.text
+            if text is None:
+                raise ValueError("Gemini returned an empty response")
+            return text.strip()
+
+        except _RETRYABLE as exc:
+            last_exc = exc
+            wait = _BACKOFF_BASE ** attempt
+            logger.warning("Gemini transient error (attempt %d/%d): %s — retrying in %.1fs",
+                           attempt + 1, _MAX_RETRIES, exc, wait)
+            await asyncio.sleep(wait)
+
+        except GoogleAPIError as exc:
+            # Non-retryable API error (bad key, invalid request, etc.)
+            logger.error("Gemini API error: %s", exc)
+            raise HTTPException(status_code=502, detail=f"Gemini API error: {exc}") from exc
+
+        except Exception as exc:
+            logger.error("Unexpected Gemini error: %s", exc)
+            raise HTTPException(status_code=502, detail=f"Gemini error: {exc}") from exc
+
+    raise HTTPException(
+        status_code=503,
+        detail=f"Gemini unavailable after {_MAX_RETRIES} retries: {last_exc}",
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -82,25 +132,19 @@ Rules:
 Paragraph:
 {req.paragraph}"""
 
-    try:
-        raw = await call_gemini(prompt)
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Gemini error: {e}")
+    raw = await call_gemini(prompt)
 
-    # Parse adapted HTML and replacements from response
     adapted_html = raw
     replacements = []
     if "---JSON---" in raw and "---END---" in raw:
         parts = raw.split("---JSON---")
         adapted_html = parts[0].strip()
         json_block = parts[1].split("---END---")[0].strip()
-        import json
         try:
             replacements = json.loads(json_block)
         except Exception:
             replacements = []
 
-    # Strip accidental markdown fences
     adapted_html = adapted_html.replace("```html", "").replace("```", "").strip()
 
     result = {"adapted_html": adapted_html, "replacements": replacements, "cache_hit": False}
@@ -127,7 +171,7 @@ class SessionSaveRequest(BaseModel):
 async def session_save(req: SessionSaveRequest):
     sessions[req.session_id] = {
         **req.model_dump(),
-        "updated_at": datetime.utcnow().isoformat(),
+        "updated_at": datetime.now(UTC).isoformat(),
     }
     return {"saved": True}
 
@@ -141,27 +185,17 @@ class SessionRestoreRequest(BaseModel):
 
 @app.post("/api/session/restore")
 async def session_restore(req: SessionRestoreRequest):
-    # Find the most-recently-updated session for this URL
-    matching = [
-        s for s in sessions.values() if s.get("url") == req.url
-    ]
+    matching = [s for s in sessions.values() if s.get("url") == req.url]
     if not matching:
         return {"found": False}
 
     session = max(matching, key=lambda s: s.get("updated_at", ""))
 
-    # Build adapted_paragraphs map from cache for known adapted indices
-    adapted_paragraphs = {}
-    for idx in session.get("adapted_indices", []):
-        # We don't store per-index HTML in session — client must re-call /adapt for misses
-        # (or extend SessionSaveRequest to include it; left as a future improvement)
-        pass
-
     return {
         "found": True,
         "session_id": session["session_id"],
         "scroll_pct": session.get("scroll_pct", 0),
-        "adapted_paragraphs": adapted_paragraphs,
+        "adapted_paragraphs": {},
         "dwell_map": session.get("dwell_map", {}),
         "rescroll_map": session.get("rescroll_map", {}),
         "session_elapsed_min": session.get("session_elapsed_min", 0),
@@ -189,7 +223,6 @@ async def review(req: ReviewRequest):
     if not req.paragraphs:
         return {"items": []}
 
-    # Sort by struggle level (dwell + rescroll) so most important come first
     sorted_paras = sorted(
         req.paragraphs,
         key=lambda p: p.dwell_ms + p.rescroll_count * 3000,
@@ -201,7 +234,10 @@ async def review(req: ReviewRequest):
         for p in sorted_paras
     )
 
-    lang_note = f"Also include an '{req.language}' equivalent in 'esl_equiv' for every term." if req.language else "Set esl_equiv to empty string."
+    lang_note = (
+        f"Also include an '{req.language}' equivalent in 'esl_equiv' for every term."
+        if req.language else "Set esl_equiv to empty string."
+    )
 
     prompt = f"""From the paragraphs below (which a reader found difficult), generate a review sheet.
 {lang_note}
@@ -211,12 +247,8 @@ Return a JSON array — no markdown, no fences, no explanation — in this exact
 Paragraphs:
 {combined}"""
 
-    try:
-        raw = await call_gemini(prompt)
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Gemini error: {e}")
+    raw = await call_gemini(prompt)
 
-    import json
     clean = raw.replace("```json", "").replace("```", "").strip()
     try:
         items = json.loads(clean)
@@ -243,7 +275,7 @@ class TelemetryRequest(BaseModel):
 async def telemetry(req: TelemetryRequest):
     telemetry_log.append({
         **req.model_dump(),
-        "ts": datetime.utcnow().isoformat(),
+        "ts": datetime.now(UTC).isoformat(),
     })
     return {"ok": True}
 
@@ -251,4 +283,8 @@ async def telemetry(req: TelemetryRequest):
 # ─── Health check ────────────────────────────────────────────────────────────
 @app.get("/")
 async def root():
-    return {"status": "ok", "endpoints": ["/api/adapt", "/api/session/save", "/api/session/restore", "/api/review", "/api/telemetry"]}
+    return {
+        "status": "ok",
+        "model": GEMINI_MODEL,
+        "endpoints": ["/api/adapt", "/api/session/save", "/api/session/restore", "/api/review", "/api/telemetry"],
+    }

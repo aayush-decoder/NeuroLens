@@ -2,6 +2,7 @@ import hashlib
 import pytest
 from fastapi.testclient import TestClient
 from unittest.mock import patch, AsyncMock
+from fastapi import HTTPException
 from main import app, adapt_cache, sessions, telemetry_log
 
 client = TestClient(app)
@@ -22,6 +23,7 @@ def test_root_returns_ok():
     assert res.status_code == 200
     data = res.json()
     assert data["status"] == "ok"
+    assert data["model"] == "gemini-2.0-flash"
     assert "/api/adapt" in data["endpoints"]
     assert "/api/session/save" in data["endpoints"]
     assert "/api/session/restore" in data["endpoints"]
@@ -56,7 +58,6 @@ def test_adapt_with_language(mock_gemini):
     mock_gemini.return_value = GEMINI_ADAPT_RESPONSE
     res = client.post("/api/adapt", json={"paragraph": "Some text.", "language": "spanish"})
     assert res.status_code == 200
-    # Confirm language was passed — Gemini prompt should have been called once
     mock_gemini.assert_called_once()
     prompt_arg = mock_gemini.call_args[0][0]
     assert "spanish" in prompt_arg.lower()
@@ -65,13 +66,9 @@ def test_adapt_with_language(mock_gemini):
 @patch("main.call_gemini", new_callable=AsyncMock)
 def test_adapt_cache_miss_then_hit(mock_gemini):
     mock_gemini.return_value = GEMINI_ADAPT_RESPONSE
-
     payload = {"paragraph": "Unique paragraph for caching."}
-    # First call — cache miss
     res1 = client.post("/api/adapt", json=payload)
     assert res1.json()["cache_hit"] is False
-
-    # Second call — cache hit, Gemini should NOT be called again
     res2 = client.post("/api/adapt", json=payload)
     assert res2.json()["cache_hit"] is True
     mock_gemini.assert_called_once()
@@ -80,7 +77,6 @@ def test_adapt_cache_miss_then_hit(mock_gemini):
 def test_adapt_cache_hit_preloaded():
     key = hashlib.sha256("preloaded paragraph".encode()).hexdigest()
     adapt_cache[key] = {"adapted_html": "<p>cached</p>", "replacements": []}
-
     res = client.post("/api/adapt", json={"paragraph": "preloaded paragraph"})
     assert res.status_code == 200
     assert res.json()["cache_hit"] is True
@@ -89,18 +85,14 @@ def test_adapt_cache_hit_preloaded():
 
 @patch("main.call_gemini", new_callable=AsyncMock)
 def test_adapt_language_affects_cache_key(mock_gemini):
-    """Same paragraph with different languages should be cached separately."""
     mock_gemini.return_value = GEMINI_ADAPT_RESPONSE
-
     client.post("/api/adapt", json={"paragraph": "Same text.", "language": "french"})
     client.post("/api/adapt", json={"paragraph": "Same text.", "language": "hindi"})
-    # Both should be cache misses → Gemini called twice
     assert mock_gemini.call_count == 2
 
 
 @patch("main.call_gemini", new_callable=AsyncMock)
 def test_adapt_no_json_block(mock_gemini):
-    """Gemini response without ---JSON--- block should still return adapted_html."""
     mock_gemini.return_value = "<p>Just HTML, no JSON block.</p>"
     res = client.post("/api/adapt", json={"paragraph": "Some paragraph."})
     assert res.status_code == 200
@@ -111,7 +103,6 @@ def test_adapt_no_json_block(mock_gemini):
 
 @patch("main.call_gemini", new_callable=AsyncMock)
 def test_adapt_malformed_json_block(mock_gemini):
-    """Malformed JSON in the block should result in empty replacements, not a crash."""
     mock_gemini.return_value = "<p>Text</p> ---JSON--- not valid json ---END---"
     res = client.post("/api/adapt", json={"paragraph": "Some paragraph."})
     assert res.status_code == 200
@@ -128,10 +119,17 @@ def test_adapt_strips_markdown_fences(mock_gemini):
 
 @patch("main.call_gemini", new_callable=AsyncMock)
 def test_adapt_gemini_error_returns_502(mock_gemini):
-    mock_gemini.side_effect = Exception("Gemini is down")
+    mock_gemini.side_effect = HTTPException(status_code=502, detail="Gemini error: boom")
     res = client.post("/api/adapt", json={"paragraph": "Some paragraph."})
     assert res.status_code == 502
     assert "Gemini error" in res.json()["detail"]
+
+
+@patch("main.call_gemini", new_callable=AsyncMock)
+def test_adapt_gemini_unavailable_returns_503(mock_gemini):
+    mock_gemini.side_effect = HTTPException(status_code=503, detail="Gemini unavailable after 3 retries")
+    res = client.post("/api/adapt", json={"paragraph": "Some paragraph."})
+    assert res.status_code == 503
 
 
 def test_adapt_missing_paragraph_returns_422():
@@ -167,6 +165,13 @@ def test_session_save_persists_data():
     assert sessions["sess-001"]["scroll_pct"] == 0.45
 
 
+def test_session_save_updated_at_is_utc_aware():
+    client.post("/api/session/save", json=SESSION_PAYLOAD)
+    ts = sessions["sess-001"]["updated_at"]
+    # timezone-aware ISO strings contain +00:00 or Z
+    assert "+" in ts or ts.endswith("Z")
+
+
 def test_session_save_overwrites_existing():
     client.post("/api/session/save", json=SESSION_PAYLOAD)
     updated = {**SESSION_PAYLOAD, "scroll_pct": 0.9}
@@ -175,7 +180,6 @@ def test_session_save_overwrites_existing():
 
 
 def test_session_save_minimal_payload():
-    """Only required fields — optional fields should default."""
     res = client.post("/api/session/save", json={"session_id": "min-sess", "url": "https://x.com"})
     assert res.status_code == 200
     assert res.json()["saved"] is True
@@ -208,15 +212,12 @@ def test_session_restore_not_found():
 
 
 def test_session_restore_returns_most_recent():
-    """When multiple sessions exist for the same URL, the latest should be returned."""
     import time
-
     old = {**SESSION_PAYLOAD, "session_id": "old-sess", "scroll_pct": 0.1}
     new = {**SESSION_PAYLOAD, "session_id": "new-sess", "scroll_pct": 0.9}
     client.post("/api/session/save", json=old)
-    time.sleep(0.01)  # ensure different updated_at timestamps
+    time.sleep(0.01)
     client.post("/api/session/save", json=new)
-
     res = client.post("/api/session/restore", json={"url": "https://example.com/article"})
     assert res.json()["session_id"] == "new-sess"
     assert res.json()["scroll_pct"] == 0.9
@@ -270,7 +271,6 @@ def test_review_with_language(mock_gemini):
 
 @patch("main.call_gemini", new_callable=AsyncMock)
 def test_review_empty_paragraphs(mock_gemini):
-    """Empty paragraphs list should short-circuit without calling Gemini."""
     res = client.post("/api/review", json={"session_id": "sess-001", "paragraphs": []})
     assert res.status_code == 200
     assert res.json()["items"] == []
@@ -279,7 +279,6 @@ def test_review_empty_paragraphs(mock_gemini):
 
 @patch("main.call_gemini", new_callable=AsyncMock)
 def test_review_sorts_by_struggle(mock_gemini):
-    """Higher dwell+rescroll paragraphs should appear first in the Gemini prompt."""
     mock_gemini.return_value = "[]"
     res = client.post("/api/review", json={
         "session_id": "s",
@@ -290,7 +289,6 @@ def test_review_sorts_by_struggle(mock_gemini):
     })
     assert res.status_code == 200
     prompt = mock_gemini.call_args[0][0]
-    # Hard paragraph (index 1) should appear before easy one (index 0)
     assert prompt.index("[1]") < prompt.index("[0]")
 
 
@@ -318,13 +316,23 @@ def test_review_strips_markdown_fences(mock_gemini):
 
 @patch("main.call_gemini", new_callable=AsyncMock)
 def test_review_gemini_error_returns_502(mock_gemini):
-    mock_gemini.side_effect = Exception("timeout")
+    mock_gemini.side_effect = HTTPException(status_code=502, detail="Gemini error: timeout")
     res = client.post("/api/review", json={
         "session_id": "s",
         "paragraphs": [{"index": 0, "text": "Text.", "dwell_ms": 5000}],
     })
     assert res.status_code == 502
     assert "Gemini error" in res.json()["detail"]
+
+
+@patch("main.call_gemini", new_callable=AsyncMock)
+def test_review_gemini_unavailable_returns_503(mock_gemini):
+    mock_gemini.side_effect = HTTPException(status_code=503, detail="Gemini unavailable after 3 retries")
+    res = client.post("/api/review", json={
+        "session_id": "s",
+        "paragraphs": [{"index": 0, "text": "Text.", "dwell_ms": 5000}],
+    })
+    assert res.status_code == 503
 
 
 def test_review_missing_session_id_returns_422():
@@ -359,16 +367,22 @@ def test_telemetry_appends_to_log():
     assert "ts" in telemetry_log[0]
 
 
+def test_telemetry_ts_is_utc_aware():
+    client.post("/api/telemetry", json=TELEMETRY_PAYLOAD)
+    ts = telemetry_log[0]["ts"]
+    assert "+" in ts or ts.endswith("Z")
+
+
 def test_telemetry_multiple_events_accumulate():
     for event in ["struggle_detected", "adaptation_shown", "peek_entered", "session_ended"]:
         client.post("/api/telemetry", json={**TELEMETRY_PAYLOAD, "event": event})
     assert len(telemetry_log) == 4
-    events = [e["event"] for e in telemetry_log]
-    assert events == ["struggle_detected", "adaptation_shown", "peek_entered", "session_ended"]
+    assert [e["event"] for e in telemetry_log] == [
+        "struggle_detected", "adaptation_shown", "peek_entered", "session_ended"
+    ]
 
 
 def test_telemetry_minimal_payload():
-    """Only required fields."""
     res = client.post("/api/telemetry", json={
         "session_id": "s",
         "url": "https://x.com",
