@@ -168,7 +168,7 @@ export default function LandingPage({
   };
 
   return (
-    <div className="min-h-screen bg-white dark:bg-gradient-to-b dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 dark:relative dark:overflow-hidden transition-colors duration-300">
+    <div className="min-h-screen bg-white dark:bg-gradient-to-b dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 dark:relative transition-colors duration-300 overflow-hidden">
       {/* Light mode background */}
       <div className="absolute -top-24 -left-24 w-80 h-80 rounded-full bg-teal-100/40 blur-3xl dark:bg-teal-600/15 dark:hidden" />
       <div className="absolute -bottom-24 -right-24 w-96 h-96 rounded-full bg-indigo-100/40 blur-3xl dark:bg-indigo-600/15 dark:hidden" />
@@ -220,8 +220,9 @@ export default function LandingPage({
                   Sign In
                 </Button>
                 <Button
+                  variant="ghost"
                   onClick={() => router.push('/sign-in?mode=signup')}
-                  className="text-sm sm:text-base px-3 sm:px-4 bg-gradient-to-r from-teal-600 via-pink-600 to-indigo-600 hover:from-teal-500 hover:via-pink-500 hover:to-indigo-500 text-white shadow-md shadow-pink-500/20 transition-all duration-300 hover:shadow-lg hover:shadow-pink-500/30 focus-visible:ring-teal-400/30"
+                  className="text-sm sm:text-base px-3 sm:px-4 text-gray-700 dark:text-slate-300 transition-all duration-300 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 hover:text-indigo-700 dark:hover:text-indigo-300 focus-visible:ring-indigo-400/30"
                 >
                   Get Started
                 </Button>
@@ -359,7 +360,7 @@ export default function LandingPage({
       <section id="features" className="py-20 md:py-28 relative z-10 bg-gray-50 dark:bg-gradient-to-b dark:from-slate-900 dark:via-slate-900 dark:to-slate-950 transition-colors duration-300">
         <div className="container">
           <div className="mx-auto max-w-2xl text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-teal-600 via-pink-600 to-indigo-600 dark:from-teal-300 dark:via-pink-300 dark:to-indigo-300 bg-clip-text text-transparent mb-4">Powerful Features</h2>
+            <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">Powerful Features</h2>
             <p className="text-lg text-gray-600 dark:text-slate-400">
               Everything you need to read smarter and learn faster.
             </p>
@@ -402,7 +403,7 @@ export default function LandingPage({
       <section className="py-20 md:py-28 relative z-10 bg-white dark:bg-gradient-to-b dark:from-slate-950 dark:via-slate-900 dark:to-slate-900 transition-colors duration-300">
         <div className="container">
           <div className="mx-auto max-w-2xl text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-teal-600 via-pink-600 to-yellow-600 dark:from-cyan-300 dark:via-pink-300 dark:to-yellow-300 bg-clip-text text-transparent mb-4">How It Works</h2>
+            <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">How It Works</h2>
             <p className="text-lg text-gray-600 dark:text-slate-400">
               Get started in 4 simple steps.
             </p>

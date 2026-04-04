@@ -1,32 +1,92 @@
 // src/app/api/adapt/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { adaptContentAI } from "@/lib/adaptation";
+import { 
+  adaptContentAI, 
+  adaptContentWithTimeThreshold,
+  calculateMaxAvgReadingTime 
+} from "@/lib/adaptation";
 import { prisma } from "@/lib/prisma";
+
+interface ParagraphTiming {
+  index: number;
+  dwellTimeMs: number;
+}
 
 export async function POST(req: NextRequest) {
   try {
-    // 1. Extract new parameters: userId and frictionType
-    const { text, strugglingParagraphs, userId, frictionType } = await req.json();
+    // Extract parameters
+    const { 
+      text, 
+      strugglingParagraphs, 
+      userId, 
+      frictionType,
+      paragraphTimings, // NEW: Array of {index, dwellTimeMs}
+      useTimeThreshold // NEW: Whether to use time-based translation
+    } = await req.json();
 
     if (!text) {
       return NextResponse.json({ error: "Text is required" }, { status: 400 });
     }
 
-    // 2. Fetch the user's preferred language for the "Multi-Lingual Cognate Mapper"
+    if (!userId) {
+      return NextResponse.json({ error: "userId is required" }, { status: 400 });
+    }
+
+    // Fetch user data: preferred language and reading history
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: { preferredLang: true }
     });
 
-    // 3. Pass all context to the adaptation logic
+    if (!user) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
+    const preferredLang = user.preferredLang || 'English';
+
+    // ============================================
+    // NEW: Time-based Translation Logic
+    // ============================================
+    if (useTimeThreshold && paragraphTimings && paragraphTimings.length > 0) {
+      // Calculate user's max average reading time from history
+      const maxAvgTimeMs = await calculateMaxAvgReadingTime(userId);
+      
+      console.log(`[ADAPT] User ${userId}: maxAvgTime=${maxAvgTimeMs}ms, preferredLang=${preferredLang}`);
+
+      // Use smart time-based adaptation
+      const modifiedText = await adaptContentWithTimeThreshold(
+        text,
+        paragraphTimings.map((timing: ParagraphTiming) => ({
+          paragraphIndex: timing.index,
+          dwellTimeMs: timing.dwellTimeMs
+        })),
+        maxAvgTimeMs,
+        frictionType || 'LONG_PAUSE',
+        preferredLang
+      );
+
+      return NextResponse.json({ 
+        modifiedText,
+        adaptationType: 'TIME_THRESHOLD',
+        maxAvgTimeMs,
+        paragraphsAdapted: paragraphTimings.length
+      });
+    }
+
+    // ============================================
+    // Legacy: Friction-based Adaptation
+    // ============================================
     const modifiedText = await adaptContentAI(
       text,
       strugglingParagraphs || [],
-      frictionType, // 'LONG_PAUSE' or 'SHORT_PAUSE'
-      user?.preferredLang || 'English'
+      frictionType || 'LONG_PAUSE',
+      preferredLang
     );
 
-    return NextResponse.json({ modifiedText });
+    return NextResponse.json({ 
+      modifiedText,
+      adaptationType: 'FRICTION_BASED'
+    });
 
   } catch (error) {
     console.error("ADAPT ERROR:", error);

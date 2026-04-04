@@ -31,7 +31,23 @@ const Word = ({
 }: WordProps) => {
   const [displayText, setDisplayText] = useState(children);
   const [isHovered, setIsHovered] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Detect dark mode on mount
+  useEffect(() => {
+    const isDark = document.documentElement.classList.contains("dark");
+    setIsDarkMode(isDark);
+
+    // Listen for theme changes
+    const observer = new MutationObserver(() => {
+      const isDark = document.documentElement.classList.contains("dark");
+      setIsDarkMode(isDark);
+    });
+    observer.observe(document.documentElement, { attributes: true });
+
+    return () => observer.disconnect();
+  }, []);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -85,6 +101,13 @@ const Word = ({
     }
   };
 
+  // Determine colors based on state and theme
+  const getColor = () => {
+    if (isHovered) return "#FFFFFF";
+    if (isHighlightable) return "#2563eb";
+    return isDarkMode ? "#cbd5e1" : "#1f2937"; // Light gray in dark mode, dark gray in light mode
+  };
+
   return (
     <motion.span
       className={`
@@ -102,7 +125,7 @@ const Word = ({
         y: isHovered ? -4 : 0,
         opacity: isDimmed && !isHovered ? 0.3 : 1,
         filter: isDimmed && !isHovered ? "blur(2px)" : "blur(0px)",
-        color: isHovered ? "#FFFFFF" : isHighlightable ? "#2563eb" : "#1f2937", // White on hover, Blue if interactive, Gray default
+        color: getColor(),
         zIndex: isHovered ? 20 : 1,
       }}
       transition={{ type: "spring", stiffness: 300, damping: 20 }}
