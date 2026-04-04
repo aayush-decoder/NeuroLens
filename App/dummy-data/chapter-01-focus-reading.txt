@@ -1,0 +1,15 @@
+Chapter 1: Friction and Comprehension
+
+Digital reading tools often include many controls that compete for attention. Students can lose context when panels, popups, and notifications interrupt reading flow.
+
+A focused interface keeps only the text and removes visual noise while scrolling. This design supports comprehension by reducing task switching and preserving working memory.
+
+Telemetry can estimate friction implicitly. If a learner pauses too long on a paragraph, scrolls back repeatedly, or slows down sharply, the system can infer comprehension difficulty.
+
+Adaptive text support can simplify selected phrases, add short inline definitions, and provide contextual hints. These changes should be subtle and reversible.
+
+At the end of reading, the system summarizes high-friction concepts and produces a compact review sheet. Learners can revisit difficult ideas quickly before moving forward.
+
+For multilingual support, difficult English words can be mapped to familiar cognates in Hindi, Spanish, French, or Telugu.
+
+Long sessions may increase fatigue. Ambient eye-strain adjustment can gradually increase line spacing, soften contrast, and rebalance typography for comfort.
