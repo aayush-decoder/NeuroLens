@@ -68,3 +68,26 @@ export function saveTheme(theme: 'light' | 'dark'): void {
 export function loadTheme(): 'light' | 'dark' {
   return (localStorage.getItem(`${STORAGE_PREFIX}:theme`) as 'light' | 'dark') || 'light';
 }
+
+export function generateUniqueFileName(fileName: string, existingFiles: string[]): string {
+  // Check if file already exists in the folder
+  if (!existingFiles.includes(fileName)) {
+    return fileName;
+  }
+
+  // Split fileName into name and extension
+  const lastDotIndex = fileName.lastIndexOf('.');
+  const name = lastDotIndex === -1 ? fileName : fileName.substring(0, lastDotIndex);
+  const extension = lastDotIndex === -1 ? '' : fileName.substring(lastDotIndex);
+
+  // Find the next available number
+  let counter = 1;
+  let newFileName = `${name}-${counter}${extension}`;
+
+  while (existingFiles.includes(newFileName)) {
+    counter++;
+    newFileName = `${name}-${counter}${extension}`;
+  }
+
+  return newFileName;
+}

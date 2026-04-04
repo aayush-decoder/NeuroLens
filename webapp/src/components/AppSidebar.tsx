@@ -3,7 +3,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   BookOpen, FolderOpen, Plus, Home, User, LogOut, Moon, Sun,
-  ChevronRight, Trash2, Settings, FilePlus, File, ChevronDown
+  ChevronRight, Trash2, Settings, FilePlus, File, ChevronDown, Upload
 } from 'lucide-react';
 import {
   Sidebar,
@@ -31,14 +31,16 @@ export function AppSidebar() {
   const pathname = usePathname();
   const { state } = useSidebar();
   const collapsed = state === 'collapsed';
-  const { files, folders, theme, addFolder, addFile, removeFolder, setTheme } = useFileStore();
+  const { files, folders, theme, addFolder, addFile, removeFolder, removeFile, setTheme } = useFileStore();
   const { user, signOut } = useAuth();
   const { profile } = useProfile();
   const [showNewFolder, setShowNewFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
+  const [newFolderParentId, setNewFolderParentId] = useState<string | null>(null);
   const [uploadFolderId, setUploadFolderId] = useState<string | null | undefined>(undefined);
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   const folderUploadInputRef = useRef<HTMLInputElement>(null);
+  const rootUploadInputRef = useRef<HTMLInputElement>(null);
 
   const toggleFolderExpand = (folderId: string) => {
     const newExpanded = new Set(expandedFolders);
@@ -48,6 +50,10 @@ export function AppSidebar() {
       newExpanded.add(folderId);
     }
     setExpandedFolders(newExpanded);
+  };
+
+  const getChildFolders = (parentId: string | null | undefined) => {
+    return folders.filter(f => f.parentFolderId === parentId);
   };
 
   const handleShowAllFiles = () => {
@@ -61,14 +67,25 @@ export function AppSidebar() {
   };
 
   const handleCreateFolder = () => {
-    if (!newFolderName.trim()) return;
+    const trimmedName = newFolderName.trim();
+    if (!trimmedName) return;
+    
+    // Check if a file with the same name already exists
+    const fileNameExists = files.some(f => f.name.toLowerCase() === trimmedName.toLowerCase());
+    if (fileNameExists) {
+      alert(`A file named "${trimmedName}" already exists. Please choose a different folder name.`);
+      return;
+    }
+    
     addFolder({
       id: crypto.randomUUID(),
-      name: newFolderName.trim(),
+      name: trimmedName,
       color: '',
       createdAt: Date.now(),
+      parentFolderId: newFolderParentId,
     });
     setNewFolderName('');
+    setNewFolderParentId(null);
     setShowNewFolder(false);
   };
 
@@ -84,10 +101,30 @@ export function AppSidebar() {
 
     try {
       const validFiles = Array.from(e.target.files).filter((f) => f.name.endsWith('.txt') || f.name.endsWith('.md'));
-      await Promise.all(validFiles.map((file) => processUploadedFile(file, uploadFolderId, addFile)));
+      const existingNames = {
+        fileNames: files.map(f => f.name),
+        folderNames: folders.map(f => f.name),
+      };
+      await Promise.all(validFiles.map((file) => processUploadedFile(file, uploadFolderId, addFile, existingNames)));
     } finally {
       e.target.value = '';
       setUploadFolderId(null);
+    }
+  };
+
+  const handleRootFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files?.length) return;
+
+    try {
+      const validFiles = Array.from(e.target.files).filter((f) => f.name.endsWith('.txt') || f.name.endsWith('.md'));
+      const rootFiles = files.filter(f => !f.folderId);
+      const existingNames = {
+        fileNames: rootFiles.map(f => f.name),
+        folderNames: folders.map(f => f.name),
+      };
+      await Promise.all(validFiles.map((file) => processUploadedFile(file, null, addFile, existingNames)));
+    } finally {
+      e.target.value = '';
     }
   };
 
@@ -108,7 +145,7 @@ export function AppSidebar() {
           </motion.div>
           {!collapsed && (
             <div>
-              <h1 className="text-base font-bold text-sidebar-foreground">AppName</h1>
+              <h1 className="text-base font-bold text-sidebar-foreground">NeuroLens</h1>
               <p className="text-[10px] text-muted-foreground">Adaptive Reader</p>
             </div>
           )}
@@ -123,6 +160,14 @@ export function AppSidebar() {
           multiple
           className="hidden"
           onChange={handleFolderFileInputChange}
+        />
+        <input
+          ref={rootUploadInputRef}
+          type="file"
+          accept=".txt,.md"
+          multiple
+          className="hidden"
+          onChange={handleRootFileUpload}
         />
 
         {/* Navigation */}
@@ -156,12 +201,21 @@ export function AppSidebar() {
           <SidebarGroupLabel className="flex items-center justify-between pr-2">
             <span>Folders</span>
             {!collapsed && (
-              <button
-                onClick={() => setShowNewFolder(true)}
-                className="p-0.5 rounded hover:bg-sidebar-accent text-muted-foreground"
-              >
-                <Plus className="w-3.5 h-3.5" />
-              </button>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => rootUploadInputRef.current?.click()}
+                  className="p-0.5 rounded hover:bg-sidebar-accent text-muted-foreground"
+                  title="Upload files to root"
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => setShowNewFolder(true)}
+                  className="p-0.5 rounded hover:bg-sidebar-accent text-muted-foreground"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                </button>
+              </div>
             )}
           </SidebarGroupLabel>
           <SidebarGroupContent>
@@ -169,16 +223,6 @@ export function AppSidebar() {
               {/* All files */}
               <SidebarMenuItem>
                 <div className="flex items-center gap-1 group/folder">
-                  <button
-                    onClick={() => toggleFolderExpand('all-files')}
-                    className="p-1 hover:bg-sidebar-accent rounded flex-shrink-0"
-                  >
-                    <ChevronDown 
-                      className={`w-4 h-4 transition-transform ${
-                        expandedFolders.has('all-files') ? '' : '-rotate-90'
-                      }`} 
-                    />
-                  </button>
                   <SidebarMenuButton
                     onClick={() => router.push('/dashboard')}
                     className="flex-1 text-muted-foreground"
@@ -186,46 +230,23 @@ export function AppSidebar() {
                     <FolderOpen className="w-4 h-4" />
                     {!collapsed && (
                       <div className="flex items-center flex-1">
-                        <span>All Files</span>
+                        <span>Suggested Files</span>
                       </div>
                     )}
                   </SidebarMenuButton>
                   {!collapsed && (
-                    <div className="flex items-center gap-0.5 ml-auto flex-shrink-0 relative w-20">
-                      <button
-                        onClick={() => handleFolderAddFiles(null)}
-                        className="p-1 hover:bg-sidebar-accent rounded text-muted-foreground hover:text-sidebar-accent-foreground opacity-0 group-hover/folder:opacity-100 transition-opacity absolute right-0"
-                        aria-label="Add files to All Files"
-                        title="Add files to All Files"
-                      >
-                        <FilePlus className="w-4 h-4" />
-                      </button>
-                      <span className="text-[10px] text-muted-foreground bg-muted rounded-full px-1.5 py-0.5 min-w-max opacity-100 group-hover/folder:opacity-0 transition-opacity ml-auto">
-                        {files.length}
+                    <div className="flex items-center gap-0.5 ml-auto flex-shrink-0 relative">
+                      <span className="text-[10px] text-muted-foreground bg-muted rounded-full px-1.5 py-0.5 min-w-max">
+                        {files.filter(f => !!f.folderId).length}
                       </span>
                     </div>
                   )}
                 </div>
               </SidebarMenuItem>
 
-              {/* Files in All Files */}
-              {expandedFolders.has('all-files') && !collapsed && (
-                <SidebarMenu className="pl-6 border-l border-sidebar-border ml-3">
-                  {files.filter(f => !f.folderId).map((file) => (
-                    <SidebarMenuItem key={file.id}>
-                      <SidebarMenuButton
-                        onClick={() => router.push(`/read/${file.id}`)}
-                        className="text-muted-foreground hover:text-foreground text-sm"
-                      >
-                        <File className="w-4 h-4" />
-                        <span className="truncate text-xs">{file.name}</span>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  ))}
-                </SidebarMenu>
-              )}
+              {/* Files in Suggested Files - not expandable, no uploads */}
 
-              {folders.map(folder => {
+              {folders.filter(f => !f.parentFolderId).map(folder => {
                 const count = files.filter(f => f.folderId === folder.id).length;
                 const folderFiles = files.filter(f => f.folderId === folder.id);
                 const isExpanded = expandedFolders.has(folder.id);
@@ -255,10 +276,10 @@ export function AppSidebar() {
                           )}
                         </SidebarMenuButton>
                         {!collapsed && (
-                          <div className="flex items-center gap-0.5 ml-auto flex-shrink-0 relative w-20">
+                          <div className="flex items-center gap-0.5 ml-auto flex-shrink-0 relative w-20 pointer-events-none">
                             <button
                               onClick={() => handleFolderAddFiles(folder.id)}
-                              className="p-1 hover:bg-sidebar-accent rounded text-muted-foreground hover:text-sidebar-accent-foreground opacity-0 group-hover/folder:opacity-100 transition-opacity absolute right-6"
+                              className="p-1 hover:bg-sidebar-accent rounded text-muted-foreground hover:text-sidebar-accent-foreground opacity-0 group-hover/folder:opacity-100 transition-opacity absolute right-6 pointer-events-auto"
                               aria-label={`Add files to folder ${folder.name}`}
                               title={`Add files to folder ${folder.name}`}
                             >
@@ -266,7 +287,7 @@ export function AppSidebar() {
                             </button>
                             <button
                               onClick={() => removeFolder(folder.id)}
-                              className="p-1 hover:bg-sidebar-accent rounded text-muted-foreground hover:text-destructive opacity-0 group-hover/folder:opacity-100 transition-opacity absolute right-0"
+                              className="p-1 hover:bg-sidebar-accent rounded text-muted-foreground hover:text-destructive opacity-0 group-hover/folder:opacity-100 transition-opacity absolute right-0 pointer-events-auto"
                               aria-label={`Delete folder ${folder.name}`}
                               title={`Delete folder ${folder.name}`}
                             >
@@ -285,15 +306,82 @@ export function AppSidebar() {
                       <SidebarMenu className="pl-6 border-l border-sidebar-border ml-3">
                         {folderFiles.map((file) => (
                           <SidebarMenuItem key={file.id}>
-                            <SidebarMenuButton
-                              onClick={() => router.push(`/read/${file.id}`)}
-                              className="text-muted-foreground hover:text-foreground text-sm"
-                            >
-                              <File className="w-4 h-4" />
-                              <span className="truncate text-xs">{file.name}</span>
-                            </SidebarMenuButton>
+                            <div className="flex items-center gap-1 group/file">
+                              <SidebarMenuButton
+                                onClick={() => router.push(`/read/${file.id}`)}
+                                className="flex-1 text-muted-foreground hover:text-foreground text-sm"
+                              >
+                                <File className="w-4 h-4" />
+                                <span className="truncate text-xs">{file.name}</span>
+                              </SidebarMenuButton>
+                              <div className="flex items-center ml-auto flex-shrink-0 relative w-20">
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); removeFile(file.id); }}
+                                  className="p-1 hover:bg-sidebar-accent rounded text-muted-foreground hover:text-destructive opacity-0 group-hover/file:opacity-100 transition-opacity absolute right-3"
+                                  aria-label={`Delete file ${file.name}`}
+                                  title={`Delete file ${file.name}`}
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </div>
                           </SidebarMenuItem>
                         ))}
+                        
+                        {/* Child folders */}
+                        {getChildFolders(folder.id).map((childFolder) => {
+                          const childCount = files.filter(f => f.folderId === childFolder.id).length;
+                          const isChildExpanded = expandedFolders.has(childFolder.id);
+                          
+                          return (
+                            <div key={childFolder.id}>
+                              <SidebarMenuItem>
+                                <div className="flex items-center gap-1 group/subfolder">
+                                  <button
+                                    onClick={() => toggleFolderExpand(childFolder.id)}
+                                    className="p-1 hover:bg-sidebar-accent rounded flex-shrink-0"
+                                  >
+                                    <ChevronDown 
+                                      className={`w-4 h-4 transition-transform ${
+                                        isChildExpanded ? '' : '-rotate-90'
+                                      }`} 
+                                    />
+                                  </button>
+                                  <SidebarMenuButton 
+                                    onClick={() => router.push(`/dashboard?folder=${childFolder.id}`)}
+                                    className="flex-1 text-muted-foreground text-sm"
+                                  >
+                                    <FolderOpen className="w-4 h-4" style={{ color: childFolder.color || undefined }} />
+                                    <span className="truncate text-xs">{childFolder.name}</span>
+                                  </SidebarMenuButton>
+                                  {!collapsed && (
+                                    <div className="flex items-center gap-0.5 ml-auto flex-shrink-0 relative w-16">
+                                      <button
+                                        onClick={() => handleFolderAddFiles(childFolder.id)}
+                                        className="p-1 hover:bg-sidebar-accent rounded text-muted-foreground hover:text-sidebar-accent-foreground opacity-0 group-hover/subfolder:opacity-100 transition-opacity absolute right-6 pointer-events-auto"
+                                        aria-label={`Add files to ${childFolder.name}`}
+                                        title={`Add files to ${childFolder.name}`}
+                                      >
+                                        <FilePlus className="w-3.5 h-3.5" />
+                                      </button>
+                                      <button
+                                        onClick={() => removeFolder(childFolder.id)}
+                                        className="p-1 hover:bg-sidebar-accent rounded text-muted-foreground hover:text-destructive opacity-0 group-hover/subfolder:opacity-100 transition-opacity absolute right-0 pointer-events-auto"
+                                        aria-label={`Delete ${childFolder.name}`}
+                                        title={`Delete ${childFolder.name}`}
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                      <span className="text-[10px] text-muted-foreground bg-muted rounded-full px-1 py-0.5 min-w-max opacity-100 group-hover/subfolder:opacity-0 transition-opacity">
+                                        {childCount}
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
+                              </SidebarMenuItem>
+                            </div>
+                          );
+                        })}
                       </SidebarMenu>
                     )}
                   </div>
@@ -324,6 +412,38 @@ export function AppSidebar() {
                     </button>
                   </div>
                 </SidebarMenuItem>
+              )}
+
+              {/* Root files */}
+              {files.filter(f => !f.folderId).length > 0 && (
+                <>
+                  <SidebarMenuItem className="mt-2 px-2">
+                    <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider py-2">Root Files</div>
+                  </SidebarMenuItem>
+                  {files.filter(f => !f.folderId).map((file) => (
+                    <SidebarMenuItem key={file.id}>
+                      <div className="flex items-center gap-1 group/file">
+                        <SidebarMenuButton
+                          onClick={() => router.push(`/read/${file.id}`)}
+                          className="flex-1 text-muted-foreground hover:text-foreground text-sm"
+                        >
+                          <File className="w-4 h-4" />
+                          <span className="truncate text-xs">{file.name}</span>
+                        </SidebarMenuButton>
+                        <div className="flex items-center ml-auto flex-shrink-0 relative w-20">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); removeFile(file.id); }}
+                            className="p-1 hover:bg-sidebar-accent rounded text-muted-foreground hover:text-destructive opacity-0 group-hover/file:opacity-100 transition-opacity absolute right-3"
+                            aria-label={`Delete file ${file.name}`}
+                            title={`Delete file ${file.name}`}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    </SidebarMenuItem>
+                  ))}
+                </>
               )}
             </SidebarMenu>
           </SidebarGroupContent>
