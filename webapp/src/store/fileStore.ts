@@ -51,8 +51,15 @@ export const useFileStore = create<FileStore>((set, get) => ({
   },
 
   removeFolder: (id) => {
-    const folders = get().folders.filter(f => f.id !== id);
-    const files = get().files.map(f => f.folderId === id ? { ...f, folderId: null } : f);
+    const allDescendantIds = new Set<string>();
+    const collectDescendants = (folderId: string) => {
+      allDescendantIds.add(folderId);
+      get().folders.filter(f => f.parentFolderId === folderId).forEach(f => collectDescendants(f.id));
+    };
+    collectDescendants(id);
+    
+    const folders = get().folders.filter(f => !allDescendantIds.has(f.id));
+    const files = get().files.map(f => allDescendantIds.has(f.folderId as string) ? { ...f, folderId: null } : f);
     set({ folders, files });
     saveFolders(folders);
     saveFiles(files);

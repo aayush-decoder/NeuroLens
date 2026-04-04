@@ -14,6 +14,7 @@ export interface Folder {
   name: string;
   color: string;
   createdAt: number;
+  parentFolderId?: string | null;
 }
 
 export interface ParagraphTelemetry {

@@ -12,9 +12,10 @@ interface Props {
   showCognates: boolean;
   lineHeight: number;
   fontWeight: number;
+  isTranslated?: boolean; // NEW: Skip English adaptations if true
 }
 
-export default function Paragraph({ text, index, frictionScore, onEnter, onHesitation, showCognates, lineHeight, fontWeight }: Props) {
+export default function Paragraph({ text, index, frictionScore, onEnter, onHesitation, showCognates, lineHeight, fontWeight, isTranslated = false }: Props) {
   const ref = useRef<HTMLParagraphElement>(null);
   const [hoveredWord, setHoveredWord] = useState<string | null>(null);
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
@@ -37,8 +38,10 @@ export default function Paragraph({ text, index, frictionScore, onEnter, onHesit
   }, [index, onEnter]);
 
   const adaptations = useMemo(() => {
+    // Skip adaptations for translated paragraphs - display as-is
+    if (isTranslated) return [];
     return getAdaptationsForText(text, frictionScore);
-  }, [text, frictionScore]);
+  }, [text, frictionScore, isTranslated]);
 
   const handleWordHover = useCallback((word: string, e: React.MouseEvent) => {
     if (hoverTimeout.current) clearTimeout(hoverTimeout.current);

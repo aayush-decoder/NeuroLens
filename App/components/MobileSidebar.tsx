@@ -131,7 +131,7 @@ export default function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
             </View>
             <View>
               <Text style={[styles.appName, isDark ? styles.appNameDark : null]}>
-                Enfinity
+                NeuroLens
               </Text>
               <Text style={[styles.appSub, isDark ? styles.appSubDark : null]}>
                 Adaptive Reader

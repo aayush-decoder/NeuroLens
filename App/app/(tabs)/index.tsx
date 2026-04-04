@@ -122,7 +122,7 @@ export default function HomeScreen() {
           <Text style={styles.brandIcon}>⟡</Text>
         </View>
         <View>
-          <Text style={[styles.brandTitle, isDark ? styles.brandTitleDark : null]}>{profile?.name || 'AppName'}</Text>
+          <Text style={[styles.brandTitle, isDark ? styles.brandTitleDark : null]}>{profile?.name || 'NeuroLens'}</Text>
           <Text style={[styles.brandSub, isDark ? styles.brandSubDark : null]}>Adaptive Reader</Text>
         </View>
       </Animated.View>

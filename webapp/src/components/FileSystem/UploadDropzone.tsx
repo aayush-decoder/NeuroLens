@@ -12,19 +12,29 @@ export default function UploadDropzone({ folderId }: Props) {
   const [isDragging, setIsDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const addFile = useFileStore(s => s.addFile);
+  const { addFile, files, folders } = useFileStore(s => ({ 
+    addFile: s.addFile,
+    files: s.files,
+    folders: s.folders,
+  }));
 
-  const handleFiles = useCallback(async (files: FileList | File[]) => {
+  const handleFiles = useCallback(async (fileList: FileList | File[]) => {
     setUploading(true);
     try {
-      const validFiles = Array.from(files).filter(f =>
+      const validFiles = Array.from(fileList).filter(f =>
         f.name.endsWith('.txt') || f.name.endsWith('.md')
       );
-      await Promise.all(validFiles.map((file) => processUploadedFile(file, folderId, addFile)));
+      // Only include files from the same folder (or root if folderId is null)
+      const filesInSameFolder = files.filter(f => f.folderId === folderId);
+      const existingNames = {
+        fileNames: filesInSameFolder.map(f => f.name),
+        folderNames: folders.map(f => f.name),
+      };
+      await Promise.all(validFiles.map((file) => processUploadedFile(file, folderId, addFile, existingNames)));
     } finally {
       setUploading(false);
     }
-  }, [folderId, addFile]);
+  }, [folderId, addFile, files, folders]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();

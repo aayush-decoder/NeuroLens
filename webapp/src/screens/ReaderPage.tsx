@@ -66,6 +66,7 @@ export default function ReaderPage({ fileId }: ReaderPageProps) {
   const [restoredSession, setRestoredSession] = useState<ReadingSessionState | null>(null);
   const [storageReady, setStorageReady] = useState(false);
   const [adaptedParagraphs, setAdaptedParagraphs] = useState<Record<number, string>>({});
+  const [translatedParagraphs, setTranslatedParagraphs] = useState<Set<number>>(new Set()); // NEW: Track translated paragraphs
   const [analysis, setAnalysis] = useState<SessionAnalysis | null>(null);
   const [fatigueLevel, setFatigueLevel] = useState<ReadingSessionState['fatigueLevel'] | null>(null);
 
@@ -215,6 +216,7 @@ export default function ReaderPage({ fileId }: ReaderPageProps) {
         const result = await adaptReaderText({
           text: paragraphs[targetIndex],
           strugglingParagraphs: [targetIndex],
+          userId: user?.id,
         });
 
         setAdaptedParagraphs((current) => {
@@ -234,6 +236,11 @@ export default function ReaderPage({ fileId }: ReaderPageProps) {
           saveSessionState(nextState);
           return next;
         });
+
+        // Track if this paragraph was translated (vs. standard adaptation)
+        if ((result as any).adaptationType === 'TIME_THRESHOLD') {
+          setTranslatedParagraphs((current) => new Set([...current, targetIndex]));
+        }
       } catch (error) {
         console.error('Paragraph adaptation failed:', error);
       } finally {
@@ -440,6 +447,7 @@ export default function ReaderPage({ fileId }: ReaderPageProps) {
             showCognates={cognatesEnabled}
             lineHeight={lineHeight}
             fontWeight={fontWeight}
+            isTranslated={translatedParagraphs.has(index)}
           />
         ))}
       </div>
