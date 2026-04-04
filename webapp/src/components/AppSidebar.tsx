@@ -24,7 +24,7 @@ import { useFileStore } from '@/store/fileStore';
 import { useAuth } from '@/hooks/useAuth';
 import { useProfile } from '@/hooks/useProfile';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { parseDocument } from '@/engines/documentParser';
+import { processUploadedFile } from '@/lib/document-upload';
 
 export function AppSidebar() {
   const router = useRouter();
@@ -66,23 +66,13 @@ export function AppSidebar() {
   const handleFolderFileInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (uploadFolderId === undefined || !e.target.files?.length) return;
 
-    const validFiles = Array.from(e.target.files).filter((f) => f.name.endsWith('.txt') || f.name.endsWith('.md'));
-    await Promise.all(
-      validFiles.map(async (file) => {
-        const text = await file.text();
-        const paragraphs = parseDocument(text, file.name);
-        addFile({
-          id: crypto.randomUUID(),
-          name: file.name.replace(/\.(txt|md)$/i, ''),
-          content: paragraphs.join('\n\n'),
-          folderId: uploadFolderId,
-          createdAt: Date.now(),
-        });
-      }),
-    );
-
-    e.target.value = '';
-    setUploadFolderId(null);
+    try {
+      const validFiles = Array.from(e.target.files).filter((f) => f.name.endsWith('.txt') || f.name.endsWith('.md'));
+      await Promise.all(validFiles.map((file) => processUploadedFile(file, uploadFolderId, addFile)));
+    } finally {
+      e.target.value = '';
+      setUploadFolderId(null);
+    }
   };
 
   const initials = profile?.display_name

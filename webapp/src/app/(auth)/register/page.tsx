@@ -1,7 +1,5 @@
-'use client';
-
-import AuthPage from '@/screens/AuthPage';
+import { redirect } from 'next/navigation';
 
 export default function RegisterPage() {
-  return <AuthPage initialMode="signup" />;
+  redirect('/sign-in?mode=signup');
 }

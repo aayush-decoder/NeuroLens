@@ -17,19 +17,36 @@ export function useProfile() {
   const [loading, setLoading] = useState(true);
 
   const fetchProfile = useCallback(async () => {
-    if (!user) { setProfile(null); setLoading(false); return; }
-    
-    // Return mock profile
+    if (!user) {
+      setProfile(null);
+      setLoading(false);
+      return;
+    }
+
+    const storageKey = `adaptive-reader:profile:${user.id}`;
+
     const mockProfile: Profile = {
-      id: 'mock-profile-id',
+      id: `${user.id}-profile`,
       user_id: user.id,
-      display_name: (user as any).user_metadata?.display_name || 'User',
+      display_name: user.name || 'User',
       avatar_url: null,
       bio: 'Just a demo user.',
       preferred_language: 'en',
       reading_goal_minutes: 30,
     };
-    
+
+    const storedProfile = localStorage.getItem(storageKey);
+    if (storedProfile) {
+      try {
+        const parsedProfile = JSON.parse(storedProfile) as Profile;
+        setProfile({ ...mockProfile, ...parsedProfile, user_id: user.id });
+        setLoading(false);
+        return;
+      } catch {
+        localStorage.removeItem(storageKey);
+      }
+    }
+
     setProfile(mockProfile);
     setLoading(false);
   }, [user]);
@@ -38,9 +55,22 @@ export function useProfile() {
 
   const updateProfile = useCallback(async (updates: Partial<Profile>) => {
     if (!user) return;
-    console.log('Mock profile update:', updates);
+
+    const storageKey = `adaptive-reader:profile:${user.id}`;
+    const nextProfile: Profile = {
+      id: profile?.id || `${user.id}-profile`,
+      user_id: user.id,
+      display_name: updates.display_name ?? profile?.display_name ?? user.name ?? 'User',
+      avatar_url: updates.avatar_url ?? profile?.avatar_url ?? null,
+      bio: updates.bio ?? profile?.bio ?? null,
+      preferred_language: updates.preferred_language ?? profile?.preferred_language ?? 'en',
+      reading_goal_minutes: updates.reading_goal_minutes ?? profile?.reading_goal_minutes ?? 30,
+    };
+
+    setProfile(nextProfile);
+    localStorage.setItem(storageKey, JSON.stringify(nextProfile));
     return { error: null };
-  }, [user]);
+  }, [profile, user]);
 
   return { profile, loading, updateProfile, refetch: fetchProfile };
 }

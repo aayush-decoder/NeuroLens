@@ -154,7 +154,7 @@ export default function LandingPage() {
             <Button variant="ghost" onClick={() => router.push('/sign-in')}>
               Sign In
             </Button>
-            <Button onClick={() => router.push('/register')}>
+            <Button onClick={() => router.push('/sign-in?mode=signup')}>
               Get Started
             </Button>
           </div>
@@ -227,8 +227,8 @@ export default function LandingPage() {
             <div className="flex flex-col sm:flex-row gap-4 justify-center mt-10">
               <Button
                 size="lg"
-                onClick={() => router.push('/register')}
-                className="gap-2 bg-gradient-to-r from-cyan-500 via-purple-500 to-pink-500 hover:from-cyan-600 hover:via-purple-600 hover:to-pink-600 text-white shadow-lg shadow-purple-500/50"
+                onClick={() => router.push('/sign-in?mode=signup')}
+                className="gap-2 bg-gradient-to-r from-cyan-600 via-purple-600 to-pink-600 hover:from-cyan-700 hover:via-purple-700 hover:to-pink-700 text-white shadow-lg shadow-purple-500/50"
               >
                 Start Reading Free
                 <ArrowRight className="w-4 h-4" />
@@ -340,18 +340,18 @@ export default function LandingPage() {
               <div className="absolute top-0 left-1/2 w-32 h-1 bg-gradient-to-r from-transparent via-cyan-400 to-transparent transform -translate-x-1/2" />
               <div className="absolute bottom-0 left-1/2 w-32 h-1 bg-gradient-to-r from-transparent via-pink-400 to-transparent transform -translate-x-1/2" />
               
-              <h2 className="text-4xl md:text-5xl font-bold mb-6 bg-gradient-to-r from-cyan-300 via-purple-300 to-pink-300 bg-clip-text text-transparent">
+              <h2 className="text-4xl md:text-5xl font-bold mb-6 bg-gradient-to-r from-cyan-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
                 Ready to Transform Your Reading?
               </h2>
               
-              <p className="text-lg md:text-xl bg-gradient-to-r from-orange-300 via-pink-300 to-cyan-300 bg-clip-text text-transparent mb-10 max-w-2xl mx-auto leading-relaxed">
+              <p className="text-lg md:text-xl bg-gradient-to-r from-orange-400 via-pink-400 to-cyan-400 bg-clip-text text-transparent mb-10 max-w-2xl mx-auto leading-relaxed">
                 Join thousands of users who are already reading smarter with Enfinity.
               </p>
               
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
                 <Button
                   size="lg"
-                  onClick={() => router.push('/register')}
+                  onClick={() => router.push('/sign-in?mode=signup')}
                   className="gap-2 bg-gradient-to-r from-primary to-primary/85 hover:from-primary/95 hover:to-primary/80 text-primary-foreground shadow-lg shadow-primary/20"
                 >
                   Get Started for Free
