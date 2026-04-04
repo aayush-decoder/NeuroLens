@@ -197,6 +197,7 @@ export default function ReaderPage({ fileId }: ReaderPageProps) {
     return () => window.removeEventListener('scroll', onScrollHandler);
   }, [adaptedParagraphs, analysis, fatigueLevel, fileId, handleScroll, level, onScroll, restoredSession, sessionId, updateFile, velocity]);
 
+  const progress = typeof window === 'undefined' ? 0 : window.scrollY / (document.documentElement.scrollHeight - window.innerHeight || 1);
   useEffect(() => {
     if (!sessionId || !file) return;
 
