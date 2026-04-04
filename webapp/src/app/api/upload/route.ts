@@ -5,7 +5,7 @@ import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { prisma } from "@/lib/prisma";
 
 const s3Client = new S3Client({
-  region: process.env.AWS_REGION || "us-east-1",
+  region: process.env.AWS_REGION || "eu-north-1",
   credentials: {
     accessKeyId: process.env.AWS_ACCESSS_KEY!,
     secretAccessKey: process.env.AWS_SECRET_KEY!,
@@ -28,7 +28,7 @@ export async function POST(request: Request) {
     const pathParam = formData.get("path") as string | null;
 
     if (!file || !pathParam) {
-        return NextResponse.json({ success: false, message: "File and path are required" }, { status: 400 });
+      return NextResponse.json({ success: false, message: "File and path are required" }, { status: 400 });
     }
 
     const arrayBuffer = await file.arrayBuffer();
@@ -52,7 +52,7 @@ export async function POST(request: Request) {
     await s3Client.send(command);
 
     // Compute accessible URI
-    const s3Url = `https://${bucketName}.s3.${process.env.AWS_REGION || "us-east-1"}.amazonaws.com/${key}`;
+    const s3Url = `https://${bucketName}.s3.${process.env.AWS_REGION || "eu-north-1"}.amazonaws.com/${key}`;
 
     // Store in Postgresql DB
     await prisma.userFile.create({
