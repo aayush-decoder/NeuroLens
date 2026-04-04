@@ -1,0 +1,35 @@
+[
+  {
+    "sessionId": "demo-session-001",
+    "type": "scroll",
+    "value": 212,
+    "meta": {
+      "scrollDepth": 380,
+      "hesitationScore": 0.21,
+      "simplificationLevel": 0,
+      "dwellMs": 920
+    }
+  },
+  {
+    "sessionId": "demo-session-001",
+    "type": "scroll",
+    "value": 74,
+    "meta": {
+      "scrollDepth": 960,
+      "hesitationScore": 0.47,
+      "simplificationLevel": 1,
+      "dwellMs": 2810
+    }
+  },
+  {
+    "sessionId": "demo-session-001",
+    "type": "scroll",
+    "value": 38,
+    "meta": {
+      "scrollDepth": 1430,
+      "hesitationScore": 0.69,
+      "simplificationLevel": 2,
+      "dwellMs": 5030
+    }
+  }
+]

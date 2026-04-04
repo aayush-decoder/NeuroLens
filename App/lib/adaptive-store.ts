@@ -121,6 +121,13 @@ export async function saveDocuments(docs: ReaderDocument[]): Promise<void> {
   await AsyncStorage.setItem(STORAGE_KEYS.documents, JSON.stringify(docs));
 }
 
+export async function deleteDocumentById(documentId: string): Promise<ReaderDocument[]> {
+  const docs = await loadDocuments();
+  const next = docs.filter((doc) => doc.id !== documentId);
+  await saveDocuments(next);
+  return next;
+}
+
 export async function loadProfile(): Promise<ProfileData> {
   try {
     const raw = await AsyncStorage.getItem(STORAGE_KEYS.profile);

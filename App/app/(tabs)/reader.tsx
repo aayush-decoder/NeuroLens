@@ -28,8 +28,10 @@ import {
   adaptText,
   analyzeSession,
   endBackendSession,
+  getFatigueState,
   sendTelemetryEvent,
   startBackendSession,
+  type FatigueResponse,
 } from '@/lib/backend-api';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
@@ -41,26 +43,80 @@ const BASE_PARAGRAPHS = [
   'At chapter end, the dashboard renders a compact concept-friction graph and auto review sheet for revision.',
 ];
 
-const SIMPLE_MAP: Record<string, { easy: string; cognate: string }> = {
-  comprehension: { easy: 'understanding', cognate: 'samajh' },
-  telemetry: { easy: 'tracking', cognate: 'nigrani' },
-  adaptation: { easy: 'adjustment', cognate: 'anukulan' },
-  contextual: { easy: 'in-text', cognate: 'sandarbhik' },
-  revision: { easy: 'review', cognate: 'punravlokan' },
+const SIMPLE_MAP: Record<string, { easy: string }> = {
+  comprehension: { easy: 'understanding' },
+  telemetry: { easy: 'tracking' },
+  adaptation: { easy: 'adjustment' },
+  contextual: { easy: 'in-text' },
+  revision: { easy: 'review' },
 };
 
-function rewriteText(text: string, level: 0 | 1 | 2, withCognates: boolean): string {
+const COGNATE_BY_LANGUAGE: Record<string, Record<string, string>> = {
+  hindi: {
+    comprehension: 'samajh',
+    telemetry: 'nigrani',
+    adaptation: 'anukulan',
+    contextual: 'sandarbhik',
+    revision: 'punravlokan',
+  },
+  spanish: {
+    comprehension: 'comprension',
+    telemetry: 'telemetria',
+    adaptation: 'adaptacion',
+    contextual: 'contextual',
+    revision: 'revision',
+  },
+  french: {
+    comprehension: 'comprehension',
+    telemetry: 'telemetrie',
+    adaptation: 'adaptation',
+    contextual: 'contextuel',
+    revision: 'revision',
+  },
+  telugu: {
+    comprehension: 'ardham',
+    telemetry: 'kolata',
+    adaptation: 'anugunam',
+    contextual: 'sandarbham',
+    revision: 'punasameeksha',
+  },
+};
+
+function normalizePreferredLanguage(value: string): keyof typeof COGNATE_BY_LANGUAGE {
+  const normalized = value.trim().toLowerCase();
+  if (normalized.includes('span')) {
+    return 'spanish';
+  }
+  if (normalized.includes('french') || normalized.includes('franc')) {
+    return 'french';
+  }
+  if (normalized.includes('telugu')) {
+    return 'telugu';
+  }
+  return 'hindi';
+}
+
+function rewriteText(
+  text: string,
+  level: 0 | 1 | 2,
+  withCognates: boolean,
+  preferredLanguage: string,
+): string {
   if (level === 0 && !withCognates) {
     return text;
   }
+
+  const languageKey = normalizePreferredLanguage(preferredLanguage);
+  const cognates = COGNATE_BY_LANGUAGE[languageKey];
 
   return Object.entries(SIMPLE_MAP).reduce((current, [hardWord, mapping]) => {
     const regex = new RegExp(`\\b${hardWord}\\b`, 'gi');
     if (level === 1 && !withCognates) {
       return current.replace(regex, mapping.easy);
     }
+    const selectedCognate = cognates[hardWord] || mapping.easy;
     const replacement = withCognates
-      ? `${mapping.easy} (${mapping.cognate})`
+      ? `${mapping.easy} (${selectedCognate})`
       : `${hardWord} (${mapping.easy})`;
     return current.replace(regex, replacement);
   }, text);
@@ -88,6 +144,7 @@ export default function ReaderScreen() {
   });
   const [adaptedParagraphs, setAdaptedParagraphs] = useState<string[] | null>(null);
   const [adaptStatus, setAdaptStatus] = useState<'idle' | 'running' | 'ready' | 'error'>('idle');
+  const [fatigueState, setFatigueState] = useState<FatigueResponse | null>(null);
 
   const lastTick = useRef(Date.now());
   const lastTelemetrySync = useRef(0);
@@ -187,6 +244,70 @@ export default function ReaderScreen() {
     const merged = renderedParagraphs.join(' ').toLowerCase();
     return Object.keys(SIMPLE_MAP).filter((word) => new RegExp(`\\b${word}\\b`, 'i').test(merged)).length;
   }, [renderedParagraphs]);
+
+  const eyeStrainMode = useMemo(() => {
+    if (fatigueState?.level) {
+      return fatigueState.level;
+    }
+    if (session.eyeStrainLoad > 0.75) {
+      return 'Recovery';
+    }
+    if (session.eyeStrainLoad > 0.4) {
+      return 'Warm';
+    }
+    return 'Neutral';
+  }, [fatigueState?.level, session.eyeStrainLoad]);
+
+  const fatigueWeight = useMemo(() => {
+    if (!fatigueState?.settings?.fontWeight) {
+      return null;
+    }
+    if (fatigueState.settings.fontWeight >= 550) {
+      return '600';
+    }
+    if (fatigueState.settings.fontWeight >= 450) {
+      return '500';
+    }
+    return '400';
+  }, [fatigueState?.settings?.fontWeight]);
+
+  const fatigueLineHeightBoost = useMemo(() => {
+    if (!fatigueState?.settings?.lineHeight) {
+      return 0;
+    }
+    return Math.max(0, Math.round((fatigueState.settings.lineHeight - 1.5) * 16));
+  }, [fatigueState?.settings?.lineHeight]);
+
+  const fatigueContrastTextColor = useMemo(() => {
+    const contrast = fatigueState?.settings?.contrast;
+    if (!contrast) {
+      return null;
+    }
+    if (contrast === 'very-high' || contrast === 'high') {
+      return isDark ? '#F5FAFF' : '#1A202C';
+    }
+    if (contrast === 'medium') {
+      return isDark ? '#E7F0FF' : '#263445';
+    }
+    return isDark ? '#DFEBFF' : '#2A3A4E';
+  }, [fatigueState?.settings?.contrast, isDark]);
+
+  const ambientTypographyStyle = useMemo(
+    () => ({
+      fontWeight:
+        fatigueWeight || (session.eyeStrainLoad > 0.65 ? '400' : session.eyeStrainLoad > 0.35 ? '500' : '600'),
+      color:
+        fatigueContrastTextColor ||
+        (session.eyeStrainLoad > 0.65
+          ? isDark
+            ? '#E7F0FF'
+            : '#263445'
+          : isDark
+            ? '#DFEBFF'
+            : '#152238'),
+    }),
+    [fatigueContrastTextColor, fatigueWeight, isDark, session.eyeStrainLoad],
+  );
 
   const readingProgress = useMemo(() => {
     const maxDepth = renderedParagraphs.length * 320;
@@ -355,6 +476,35 @@ export default function ReaderScreen() {
     };
   }, [adaptedParagraphs?.length, primaryDocument, session.backendSessionId, session.simplificationLevel]);
 
+  useEffect(() => {
+    if (!session.backendSessionId) {
+      return;
+    }
+
+    let active = true;
+
+    const syncFatigue = async () => {
+      try {
+        const remoteFatigue = await getFatigueState(session.backendSessionId as string);
+        if (active) {
+          setFatigueState(remoteFatigue);
+        }
+      } catch {
+        // Keep local eye-strain fallback when fatigue API is unavailable.
+      }
+    };
+
+    void syncFatigue();
+    const timer = setInterval(() => {
+      void syncFatigue();
+    }, 20000);
+
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, [session.backendSessionId]);
+
   const applyTelemetry = useCallback((offsetY: number, velocity: number) => {
     const now = Date.now();
     const delta = now - lastTick.current;
@@ -452,7 +602,7 @@ export default function ReaderScreen() {
     transform: [{ scale: 0.99 + themeShift.value * 0.01 }],
   }));
 
-  const lineHeight = (focusMode ? 35 : 31) + Math.round(session.eyeStrainLoad * 8);
+  const lineHeight = (focusMode ? 35 : 31) + Math.round(session.eyeStrainLoad * 8) + fatigueLineHeightBoost;
   const fontSize = (focusMode ? 21 : 18.5) + session.eyeStrainLoad * 1.2;
   const headerTop = 8;
   const scrollTop = headerTop + 78;
@@ -505,6 +655,10 @@ export default function ReaderScreen() {
             <Text style={styles.metaLabel}>Backend</Text>
             <Text style={styles.metaValue}>{session.backendSyncStatus || 'idle'}</Text>
           </View>
+          <View style={[styles.metaChip, isDark ? styles.metaChipDark : null]}>
+            <Text style={styles.metaLabel}>Eye strain</Text>
+            <Text style={styles.metaValue}>{eyeStrainMode}</Text>
+          </View>
         </View>
 
         {renderedParagraphs.map((paragraph, index) => (
@@ -514,9 +668,16 @@ export default function ReaderScreen() {
               styles.paragraphBlock,
               isDark ? styles.paragraphBlockDark : null,
               focusMode ? (isDark ? styles.paragraphBlockFocusDark : styles.paragraphBlockFocus) : null,
+              session.eyeStrainLoad > 0.6 ? (isDark ? styles.paragraphBlockCalmDark : styles.paragraphBlockCalm) : null,
             ]}>
-            <Text style={[styles.paragraph, isDark ? styles.paragraphDark : null, { lineHeight, fontSize }]}>
-              {rewriteText(paragraph, useLocalRewrite ? session.simplificationLevel : 0, cognateMode)}
+            <Text
+              style={[
+                styles.paragraph,
+                isDark ? styles.paragraphDark : null,
+                { lineHeight, fontSize },
+                ambientTypographyStyle,
+              ]}>
+              {rewriteText(paragraph, useLocalRewrite ? session.simplificationLevel : 0, cognateMode, preferredLanguage)}
             </Text>
           </Pressable>
         ))}
@@ -534,6 +695,9 @@ export default function ReaderScreen() {
           </Text>
           <Text style={styles.sectionHint}>
             Adaptive AI: {adaptStatus === 'running' ? 'Generating assist text...' : adaptStatus === 'ready' ? 'Assist text synced from backend.' : adaptStatus === 'error' ? 'Backend adaptation unavailable.' : 'Waiting for friction signals.'}
+          </Text>
+          <Text style={styles.sectionHint}>
+            Supported languages: Hindi, Spanish, French, Telugu (falls back to Hindi).
           </Text>
           <Pressable
             style={[styles.toggleBtn, cognateMode ? styles.toggleBtnOn : null]}
@@ -731,6 +895,14 @@ const styles = StyleSheet.create({
   paragraphBlockFocusDark: {
     backgroundColor: 'rgba(30, 43, 62, 0.95)',
     borderColor: 'rgba(102, 134, 176, 0.44)',
+  },
+  paragraphBlockCalm: {
+    backgroundColor: 'rgba(247, 242, 228, 0.95)',
+    borderColor: 'rgba(181, 158, 113, 0.35)',
+  },
+  paragraphBlockCalmDark: {
+    backgroundColor: 'rgba(40, 45, 56, 0.95)',
+    borderColor: 'rgba(124, 136, 160, 0.35)',
   },
   paragraph: {
     color: '#152238',
