@@ -8,7 +8,7 @@ const s3Client = new S3Client({
   region: process.env.AWS_REGION || "us-east-1",
   credentials: {
     accessKeyId: process.env.AWS_ACCESSS_KEY!,
-    secretAccessKey: process.env.AWS_SECRET_KEY!,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
   },
 });
 
