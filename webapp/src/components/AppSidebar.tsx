@@ -40,8 +40,13 @@ export function AppSidebar() {
   const folderUploadInputRef = useRef<HTMLInputElement>(null);
 
   const handleShowAllFiles = () => {
-    router.push('/');
+    router.push('/dashboard');
     window.dispatchEvent(new Event('adaptive-reader:show-all-files'));
+  };
+
+  const handleSignOut = async () => {
+    await signOut();
+    router.push('/sign-in');
   };
 
   const handleCreateFolder = () => {
@@ -115,8 +120,8 @@ export function AppSidebar() {
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton
-                  onClick={() => router.push('/')}
-                  className={isActive('/') ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium' : ''}
+                  onClick={() => router.push('/dashboard')}
+                  className={isActive('/dashboard') ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium' : ''}
                 >
                   <Home className="w-4 h-4" />
                   {!collapsed && <span>Dashboard</span>}
@@ -278,7 +283,7 @@ export function AppSidebar() {
             )}
             {!collapsed && (
               <button
-                onClick={signOut}
+                onClick={handleSignOut}
                 className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
               >
                 <LogOut className="w-3.5 h-3.5" />
