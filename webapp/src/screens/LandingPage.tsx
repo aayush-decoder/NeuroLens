@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { ArrowRight, Zap, Eye, BarChart3, BookOpen, Brain, Shield, Sparkles, Moon, Sun } from 'lucide-react';
 import { useEffect, useState, useRef } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
+import HyperTextParagraph from '@/components/ui/hyper-text-with-decryption';
 
 type LandingPageProps = {
   isAuthenticated?: boolean;
@@ -437,6 +438,40 @@ export default function LandingPage({
                 </div>
               );
             })}
+          </div>
+        </div>
+      </section>
+
+      {/* Interactive Features Section with HyperText */}
+      <section className="py-20 md:py-28 relative z-10 bg-gradient-to-b from-gray-50 to-white dark:from-slate-950 dark:via-slate-900 dark:to-slate-900 transition-colors duration-300">
+        <div className="container">
+          <div className="mx-auto max-w-3xl">
+            {/* Header */}
+            <div className="text-center mb-16">
+              <h2 className="text-3xl md:text-4xl font-bold mb-4 text-gray-900 dark:text-white">
+                Why Choose NeuroLens?
+              </h2>
+            </div>
+
+            {/* Card with HyperText */}
+            <div className="bg-white dark:bg-slate-800/40 dark:backdrop-blur-md rounded-2xl p-8 md:p-12 border border-gray-200 dark:border-slate-700/60 shadow-lg dark:shadow-black/20 relative overflow-hidden group">
+              {/* Background accent */}
+              <div className="absolute -top-20 -right-20 w-40 h-40 bg-gradient-to-br from-teal-200 to-cyan-200 dark:from-teal-600/20 dark:to-cyan-600/20 rounded-full blur-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+              <div className="absolute -bottom-20 -left-20 w-40 h-40 bg-gradient-to-tr from-pink-200 to-rose-200 dark:from-pink-600/20 dark:to-rose-600/20 rounded-full blur-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+
+              <div className="relative z-10">
+                <HyperTextParagraph
+                  text="NeuroLens combines intelligent document parsing with adaptive eye-strain reduction technologies. Our advanced algorithms optimize every aspect of your reading experience, from contrast management to personalized formatting. Decrypt our key benefits by hovering over highlighted keywords to see how we transform digital reading into a seamless, comfortable journey."
+                  highlightWords={['intelligent', 'adaptive', 'algorithms', 'optimize', 'personalized', 'seamless']}
+                  className="text-lg md:text-xl text-gray-700 dark:text-slate-200 leading-relaxed"
+                />
+              </div>
+
+              {/* Bottom accent line */}
+              <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-teal-400 to-transparent opacity-50" />
+            </div>
+
+
           </div>
         </div>
       </section>
