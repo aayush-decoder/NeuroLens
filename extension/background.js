@@ -1,98 +1,228 @@
+const BASE = "https://enfinity-hackathon-backend.onrender.com";
+const BASE_WEBAPP = "https://aleta-stairless-nguyet.ngrok-free.dev"; // Next.js webapp
+
+// ── Auth token ────────────────────────────────────────────────────────────────
+async function getToken() {
+    const data = await chrome.storage.local.get("ar_token");
+    return data.ar_token || null;
+}
+
+async function authHeaders() {
+    const token = await getToken();
+    const headers = { "Content-Type": "application/json" };
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    return headers;
+}
+
+// ── Message router ────────────────────────────────────────────────────────────
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+    console.log("[AR:background] Message received:", msg.type, msg);
+
     if (msg.type === "ADAPT_PARAGRAPH") {
-        adaptParagraph(msg.text, msg.language).then(sendResponse);
+        handleAdapt(msg).then(sendResponse).catch(err => {
+            console.error("[AR:background] ADAPT_PARAGRAPH error:", err);
+            sendResponse({ error: err.message });
+        });
         return true;
     }
-    if (msg.type === "GENERATE_REVIEW") {
-        generateReview(msg.paragraphs).then(sendResponse);
+
+    if (msg.type === "SESSION_SAVE") {
+        handleSessionSave(msg).then(sendResponse).catch(err => {
+            console.error("[AR:background] SESSION_SAVE error:", err);
+            sendResponse({ error: err.message });
+        });
         return true;
+    }
+
+    if (msg.type === "SESSION_RESTORE") {
+        handleSessionRestore(msg).then(sendResponse).catch(err => {
+            console.error("[AR:background] SESSION_RESTORE error:", err);
+            sendResponse({ error: err.message });
+        });
+        return true;
+    }
+
+    if (msg.type === "GENERATE_REVIEW") {
+        handleReview(msg).then(sendResponse).catch(err => {
+            console.error("[AR:background] GENERATE_REVIEW error:", err);
+            sendResponse({ error: err.message });
+        });
+        return true;
+    }
+
+    if (msg.type === "SIMPLIFY_PARAGRAPH") {
+        handleSimplify(msg).then(sendResponse).catch(err => {
+            console.error("[AR:background] SIMPLIFY_PARAGRAPH error:", err);
+            sendResponse({ words: [] });
+        });
+        return true;
+    }
+
+    if (msg.type === "TELEMETRY") {
+        // fire-and-forget — don't await
+        handleTelemetry(msg).catch(err =>
+            console.error("[AR:background] TELEMETRY error:", err)
+        );
+        sendResponse({ ok: true });
+        return false;
     }
 });
 
-async function getApiKey() {
-    const data = await chrome.storage.sync.get("apiKey");
-    return data.apiKey || "";
+// ── /api/adapt ────────────────────────────────────────────────────────────────
+async function handleAdapt(msg) {
+    const payload = {
+        paragraph: msg.text,
+        paragraph_index: msg.paragraph_index,
+        url: msg.url,
+        dwell_ms: msg.dwell_ms,
+        rescroll_count: msg.rescroll_count,
+        session_elapsed_min: msg.session_elapsed_min,
+        language: msg.language || null
+    };
+
+    console.log("[AR:background] /api/adapt → sending payload:", payload);
+    const t0 = Date.now();
+
+    const res = await fetch(`${BASE}/api/adapt`, {
+        method: "POST",
+        headers: await authHeaders(),
+        body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) {
+        const errText = await res.text();
+        console.error("[AR:background] /api/adapt HTTP error:", res.status, errText);
+        throw new Error(`adapt HTTP ${res.status}`);
+    }
+
+    const data = await res.json();
+    console.log(
+        `[AR:background] /api/adapt ← response in ${Date.now() - t0}ms`,
+        "cache_hit:", data.cache_hit,
+        "replacements:", data.replacements?.length,
+        data
+    );
+    return data;
 }
 
-async function adaptParagraph(text, language) {
-    const apiKey = await getApiKey();
-    if (!apiKey) return { error: "no_key" };
+// ── /api/session/save ─────────────────────────────────────────────────────────
+async function handleSessionSave(msg) {
+    const payload = {
+        session_id: msg.session_id,
+        url: msg.url,
+        scroll_pct: msg.scroll_pct,
+        adapted_indices: msg.adapted_indices,
+        struggled_indices: msg.struggled_indices,
+        dwell_map: msg.dwell_map,
+        rescroll_map: msg.rescroll_map,
+        session_elapsed_min: msg.session_elapsed_min,
+        language: msg.language || null
+    };
 
-    const langLine = language
-        ? `After each [definition], also add the ${language} equivalent in (parentheses).`
-        : "";
+    console.log("[AR:background] /api/session/save → payload:", payload);
 
-    const prompt = `You are a reading assistant. Rewrite the paragraph below for a 7th-grade reader.
-Rules:
-1. Keep the same meaning and all facts.
-2. Replace any word harder than 9th-grade with a simpler synonym inline.
-3. For every technical term or jargon word, wrap it like this:
-   <span class="ar-def" title="ORIGINAL_WORD">SIMPLER_WORD [definition]</span>
-4. For every acronym (2–5 uppercase letters), expand it like:
-   <span class="ar-acronym">ACRONYM (full expansion)</span>
-5. ${langLine}
-6. Return ONLY the rewritten paragraph as plain HTML — no markdown, no extra tags, no explanation.
+    const res = await fetch(`${BASE}/api/session/save`, {
+        method: "POST",
+        headers: await authHeaders(),
+        body: JSON.stringify(payload)
+    });
 
-Paragraph:
-${text}`;
-
-    try {
-        const res = await fetch("https://api.anthropic.com/v1/messages", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "x-api-key": apiKey,
-                "anthropic-version": "2023-06-01"
-            },
-            body: JSON.stringify({
-                model: "claude-sonnet-4-20250514",
-                max_tokens: 1024,
-                messages: [{ role: "user", content: prompt }]
-            })
-        });
-
-        const data = await res.json();
-        const adapted = data.content?.[0]?.text?.trim() || "";
-        // Strip any accidental markdown fences
-        const clean = adapted.replace(/^```html?\n?/, "").replace(/\n?```$/, "").trim();
-        return { adapted: clean };
-    } catch (e) {
-        return { error: e.message };
-    }
+    const data = await res.json();
+    console.log("[AR:background] /api/session/save ← response:", data);
+    return data;
 }
 
-async function generateReview(paragraphs) {
-    const apiKey = await getApiKey();
-    if (!apiKey) return { items: [] };
+// ── /api/session/restore ──────────────────────────────────────────────────────
+async function handleSessionRestore(msg) {
+    console.log("[AR:background] /api/session/restore → url:", msg.url);
 
-    const combined = paragraphs.map((p, i) => `[${i + 1}] ${p}`).join("\n\n");
+    const res = await fetch(`${BASE}/api/session/restore`, {
+        method: "POST",
+        headers: await authHeaders(),
+        body: JSON.stringify({ url: msg.url })
+    });
 
-    const prompt = `From the paragraphs below (which a reader found difficult), generate a review sheet.
-Return a JSON array of {"term": "...", "definition": "..."} objects covering the key concepts.
-Return ONLY valid JSON — no markdown, no fences, no explanation.
+    const data = await res.json();
+    console.log("[AR:background] /api/session/restore ← response:", data);
+    return data;
+}
 
-${combined}`;
+// ── /api/review ───────────────────────────────────────────────────────────────
+async function handleReview(msg) {
+    const payload = {
+        session_id: msg.session_id,
+        paragraphs: msg.paragraphs,
+        language: msg.language || null
+    };
 
-    try {
-        const res = await fetch("https://api.anthropic.com/v1/messages", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "x-api-key": apiKey,
-                "anthropic-version": "2023-06-01"
-            },
-            body: JSON.stringify({
-                model: "claude-sonnet-4-20250514",
-                max_tokens: 1024,
-                messages: [{ role: "user", content: prompt }]
-            })
-        });
+    console.log("[AR:background] /api/review → payload:", payload);
+    const t0 = Date.now();
 
-        const data = await res.json();
-        const raw = data.content?.[0]?.text?.trim() || "[]";
-        const clean = raw.replace(/^```json?\n?/, "").replace(/\n?```$/, "").trim();
-        return { items: JSON.parse(clean) };
-    } catch {
-        return { items: [] };
+    const res = await fetch(`${BASE}/api/review`, {
+        method: "POST",
+        headers: await authHeaders(),
+        body: JSON.stringify(payload)
+    });
+
+    const data = await res.json();
+    console.log(`[AR:background] /api/review ← in ${Date.now() - t0}ms`, data);
+    return data;
+}
+
+// ── /api/telemetry ────────────────────────────────────────────────────────────
+async function handleTelemetry(msg) {
+    const payload = {
+        session_id: msg.session_id,
+        url: msg.url,
+        event: msg.event,
+        paragraph_index: msg.paragraph_index ?? null,
+        dwell_ms: msg.dwell_ms ?? null,
+        rescroll_count: msg.rescroll_count ?? null,
+        session_elapsed_min: msg.session_elapsed_min ?? null
+    };
+
+    console.log("[AR:background] /api/telemetry → event:", payload.event, payload);
+
+    await fetch(`${BASE}/api/telemetry`, {
+        method: "POST",
+        headers: await authHeaders(),
+        body: JSON.stringify(payload)
+    });
+}
+
+// ── /api/simplify (webapp) ────────────────────────────────────────────────────
+async function handleSimplify(msg) {
+    // Sanitize: strip control chars and lone backslashes before sending
+    const rawText = (msg.text || "").trim();
+    const safeText = rawText
+        .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, " ")
+        .replace(/\\(?!["\\/bfnrtu])/g, "\\\\")
+        .slice(0, 4000);
+
+    if (!safeText) return { words: [] };
+
+    console.log("[AR:background] /api/simplify → para length:", safeText.length);
+    const t0 = Date.now();
+
+    const res = await fetch(`${BASE_WEBAPP}/api/simplify`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: safeText })
+    });
+
+    console.log("[AR:background] /api/simplify → response:", res);
+
+    if (!res.ok) {
+        const errText = await res.text();
+        console.error("[AR:background] /api/simplify HTTP error:", res.status, errText);
+        return { words: [] };
     }
+
+    const data = await res.json();
+    console.log(
+        `[AR:background] /api/simplify ← in ${Date.now() - t0}ms`,
+        "words found:", data.words?.length,
+        data
+    );
+    return data;
 }

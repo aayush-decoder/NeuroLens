@@ -46,6 +46,23 @@
     font-style: italic;
 }
 
+/* Inline glossary: simplified meaning shown in brackets after a hard word */
+.ar-gloss {
+    font-style: italic;
+    font-size: 0.84em;
+    color: #5c6bc0;
+    margin-left: 1px;
+    opacity: 0.85;
+    pointer-events: none;
+    user-select: none;
+}
+
+/* The hard word itself gets a subtle underline so readers know it was annotated */
+.ar-hard-word {
+    border-bottom: 1px dotted #5c6bc0;
+    cursor: help;
+}
+
 /* ── Toolbar (top-right, auto-hides) ── */
 #ar-toolbar {
     position: fixed;

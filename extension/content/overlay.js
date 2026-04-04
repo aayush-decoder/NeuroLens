@@ -1,81 +1,66 @@
-// Guard against double-injection
 if (window.__arActive) {
-    // Already running — just un-peek if in peek mode
     const bar = document.getElementById("ar-peek-bar");
     if (bar?.classList.contains("ar-visible")) resumeFromPeek();
+    console.log("[AR:overlay] Already active — skipping re-init");
 } else {
     window.__arActive = true;
     initAdaptiveReader();
 }
 
-/* ─────────────────────────────────────────
-   INIT
-───────────────────────────────────────── */
 function initAdaptiveReader() {
+    console.log("[AR:overlay] initAdaptiveReader() starting");
     const pageParas = extractPageParagraphs();
+    console.log("[AR:overlay] Extracted", pageParas.length, "paragraphs from page");
 
     buildDOM(pageParas);
-
-    // Hide original page scroll (overlay covers it)
     document.documentElement.style.overflow = "hidden";
 
     const overlay = document.getElementById("ar-overlay");
     const column = document.getElementById("ar-column");
 
-    // Expose globals for other modules
     window._arOverlay = overlay;
     window._arColumn = column;
     window._arParagraphs = pageParas;
-    window._arStruggledParagraphs = [];
+    window._arStruggledParagraphs = window._arStruggledParagraphs || [];
 
-    // Boot modules
-    initPersistence(overlay, column);
-    initTelemetry(overlay);
-    initEyeStrain(overlay, column);
+    // Boot order matters
+    initPersistence(overlay, column);   // sets _arSessionStart, _arDwellMap, etc.
+    initTelemetry(overlay);             // starts observers using restored maps
+    initEyeStrain(overlay, column);     // reads _arSessionStart set by persistence
     initFileLoader(
         document.getElementById("ar-dropzone"),
         column,
         document.getElementById("ar-upload-btn")
     );
 
-    // Toolbar auto-hide
     setupToolbarAutoHide();
+    updatePeekProgress();
 
-    // Keyboard shortcut: Esc → peek
     document.addEventListener("keydown", (e) => {
         if (e.key === "Escape") {
             const bar = document.getElementById("ar-peek-bar");
-            if (bar.classList.contains("ar-visible")) {
-                resumeFromPeek();
-            } else {
-                enterPeekMode();
-            }
+            bar?.classList.contains("ar-visible") ? resumeFromPeek() : enterPeekMode();
         }
     });
 
-    // Wire buttons
-    document.getElementById("ar-peek-btn")
-        .addEventListener("click", enterPeekMode);
-    document.getElementById("ar-end-btn")
-        .addEventListener("click", endSession);
+    document.getElementById("ar-peek-btn").addEventListener("click", enterPeekMode);
+    document.getElementById("ar-end-btn").addEventListener("click", endSession);
 
-    // Keep progress bar updated while reading
-    overlay.addEventListener("scroll", updatePeekProgress);
+    overlay.addEventListener("scroll", () => {
+        updatePeekProgress();
+    });
+
+    console.log("[AR:overlay] Init complete. Session:", window._arSessionId);
 }
 
-/* ─────────────────────────────────────────
-   DOM CONSTRUCTION
-───────────────────────────────────────── */
+// ── DOM Build ─────────────────────────────────────────────────────────────────
 function buildDOM(pageParas) {
-    // Overlay + column
     const overlay = el("div", { id: "ar-overlay" });
     const column = el("div", { id: "ar-column" });
     overlay.appendChild(column);
     document.body.appendChild(overlay);
-
     renderParagraphs(column, pageParas);
 
-    // Toolbar
     const toolbar = el("div", { id: "ar-toolbar" });
     toolbar.innerHTML = `
     <span id="ar-session-clock" style="font-size:11px;font-family:sans-serif;color:#888;margin-right:4px"></span>
@@ -85,7 +70,6 @@ function buildDOM(pageParas) {
   `;
     document.body.appendChild(toolbar);
 
-    // Peek bar
     const peekBar = el("div", { id: "ar-peek-bar" });
     peekBar.innerHTML = `
     <span id="ar-peek-title">${document.title}</span>
@@ -97,16 +81,13 @@ function buildDOM(pageParas) {
     <button id="ar-end-peek-btn" title="End session">✕</button>
   `;
     document.body.appendChild(peekBar);
-
     peekBar.querySelector("#ar-resume-btn").addEventListener("click", resumeFromPeek);
     peekBar.querySelector("#ar-end-peek-btn").addEventListener("click", endSession);
 
-    // Dropzone
     const dz = el("div", { id: "ar-dropzone" });
     dz.textContent = "Drop .txt or .md to load into reader";
     document.body.appendChild(dz);
 
-    // Review modal
     const modal = el("div", { id: "ar-review-modal" });
     modal.innerHTML = `
     <div id="ar-review-inner">
@@ -122,16 +103,10 @@ function buildDOM(pageParas) {
     </div>
   `;
     document.body.appendChild(modal);
+    modal.querySelector("#ar-modal-close").addEventListener("click", () => modal.classList.remove("ar-visible"));
+    modal.querySelector("#ar-destroy-btn").addEventListener("click", destroyReader);
+    modal.addEventListener("click", (e) => { if (e.target === modal) modal.classList.remove("ar-visible"); });
 
-    modal.querySelector("#ar-modal-close")
-        .addEventListener("click", () => modal.classList.remove("ar-visible"));
-    modal.querySelector("#ar-destroy-btn")
-        .addEventListener("click", destroyReader);
-    modal.addEventListener("click", (e) => {
-        if (e.target === modal) modal.classList.remove("ar-visible");
-    });
-
-    // Session clock tick
     setInterval(updateSessionClock, 30000);
     updateSessionClock();
 }
@@ -142,9 +117,6 @@ function el(tag, attrs = {}) {
     return e;
 }
 
-/* ─────────────────────────────────────────
-   PARAGRAPH RENDERING
-───────────────────────────────────────── */
 function renderParagraphs(column, paras) {
     column.innerHTML = "";
     paras.forEach((text, i) => {
@@ -153,14 +125,14 @@ function renderParagraphs(column, paras) {
         p.dataset.index = i;
         column.appendChild(p);
     });
+    console.log("[AR:overlay] Rendered", paras.length, "paragraphs into column");
 }
 
 function extractPageParagraphs() {
-    const candidates = Array.from(
-        document.querySelectorAll("p, article p, main p, .post-content p, .entry-content p")
-    );
     const seen = new Set();
-    return candidates
+    return Array.from(
+        document.querySelectorAll("p, article p, main p, .post-content p, .entry-content p")
+    )
         .filter(el => {
             const t = el.innerText.trim();
             if (t.length < 80 || seen.has(t)) return false;
@@ -170,27 +142,30 @@ function extractPageParagraphs() {
         .map(el => el.innerText.trim());
 }
 
-/* ─────────────────────────────────────────
-   PEEK MODE — overlay slides to bookmark bar
-───────────────────────────────────────── */
+// ── Peek Mode ─────────────────────────────────────────────────────────────────
 function enterPeekMode() {
     const overlay = document.getElementById("ar-overlay");
     const bar = document.getElementById("ar-peek-bar");
     const toolbar = document.getElementById("ar-toolbar");
 
-    // Save scroll before hiding
     window._arSavedScroll = overlay.scrollTop;
-
     overlay.style.opacity = "0";
     overlay.style.pointerEvents = "none";
     toolbar.style.display = "none";
-
-    // Restore page scroll so user can navigate
     document.documentElement.style.overflow = "";
-    document.body.style.overflow = "";
-
     bar.classList.add("ar-visible");
     updatePeekProgress();
+
+    console.log("[AR:overlay] Entered peek mode. Saved scroll:", window._arSavedScroll);
+
+    // Fire telemetry
+    chrome.runtime.sendMessage({
+        type: "TELEMETRY",
+        session_id: window._arSessionId,
+        url: location.href,
+        event: "peek_entered",
+        session_elapsed_min: (Date.now() - window._arSessionStart) / 60000
+    });
 }
 
 function resumeFromPeek() {
@@ -199,17 +174,15 @@ function resumeFromPeek() {
     const toolbar = document.getElementById("ar-toolbar");
 
     bar.classList.remove("ar-visible");
-
     document.documentElement.style.overflow = "hidden";
-
     overlay.style.opacity = "1";
     overlay.style.pointerEvents = "";
     toolbar.style.display = "";
 
-    // Restore exact scroll position
     if (window._arSavedScroll != null) {
         overlay.scrollTop = window._arSavedScroll;
     }
+    console.log("[AR:overlay] Resumed from peek. Scroll restored to:", window._arSavedScroll);
 }
 
 function updatePeekProgress() {
@@ -223,40 +196,31 @@ function updatePeekProgress() {
     if (pctEl) pctEl.textContent = pct + "%";
 }
 
-/* ─────────────────────────────────────────
-   TOOLBAR AUTO-HIDE
-───────────────────────────────────────── */
+// ── Toolbar auto-hide ─────────────────────────────────────────────────────────
 function setupToolbarAutoHide() {
     const toolbar = document.getElementById("ar-toolbar");
     const overlay = document.getElementById("ar-overlay");
     let timer;
-
     const show = () => {
         toolbar.classList.remove("ar-hidden");
         clearTimeout(timer);
         timer = setTimeout(() => toolbar.classList.add("ar-hidden"), 2500);
     };
-
     overlay.addEventListener("mousemove", show);
     overlay.addEventListener("scroll", show);
     show();
 }
 
-/* ─────────────────────────────────────────
-   SESSION CLOCK
-───────────────────────────────────────── */
+// ── Session clock ─────────────────────────────────────────────────────────────
 function updateSessionClock() {
-    const el = document.getElementById("ar-session-clock");
-    if (!el || !window._arSessionStart) return;
+    const clockEl = document.getElementById("ar-session-clock");
+    if (!clockEl || !window._arSessionStart) return;
     const mins = Math.floor((Date.now() - window._arSessionStart) / 60000);
-    el.textContent = mins < 1 ? "" : `${mins}m`;
+    clockEl.textContent = mins < 1 ? "" : `${mins}m`;
 }
 
-/* ─────────────────────────────────────────
-   END SESSION → REVIEW SHEET
-───────────────────────────────────────── */
+// ── End Session → Review sheet ────────────────────────────────────────────────
 function endSession() {
-    // If currently in peek mode, close the bar first
     const bar = document.getElementById("ar-peek-bar");
     if (bar?.classList.contains("ar-visible")) resumeFromPeek();
 
@@ -266,49 +230,75 @@ function endSession() {
 
     modal.classList.add("ar-visible");
 
+    const elapsedMin = (Date.now() - window._arSessionStart) / 60000;
+    console.log(
+        "[AR:overlay] endSession() called.",
+        `Struggled paragraphs: ${struggled.length},`,
+        `elapsed: ${elapsedMin.toFixed(2)} min`
+    );
+
+    // Fire session_ended telemetry
+    chrome.runtime.sendMessage({
+        type: "TELEMETRY",
+        session_id: window._arSessionId,
+        url: location.href,
+        event: "session_ended",
+        session_elapsed_min: elapsedMin
+    });
+
     if (struggled.length === 0) {
-        content.innerHTML = "<p style='color:#666;font-size:14px'>No difficult passages detected this session. Great reading!</p>";
+        content.innerHTML = "<p style='color:#666;font-size:14px'>No difficult passages detected this session.</p>";
         return;
     }
 
     content.innerHTML = "<p style='color:#999;font-size:13px'>Generating review sheet…</p>";
 
-    chrome.runtime.sendMessage(
-        { type: "GENERATE_REVIEW", paragraphs: struggled.map(p => p.text) },
-        (res) => {
-            if (res?.items?.length) {
-                const rows = res.items
-                    .map(item => `<tr><td>${escHtml(item.term)}</td><td>${escHtml(item.definition)}</td></tr>`)
-                    .join("");
-                content.innerHTML = `<table>${rows}</table>`;
-            } else {
-                content.innerHTML = "<p style='color:#999;font-size:13px'>Could not generate review sheet.</p>";
+    chrome.storage.sync.get("language", (d) => {
+        chrome.runtime.sendMessage(
+            {
+                type: "GENERATE_REVIEW",
+                session_id: window._arSessionId,
+                paragraphs: struggled.map(p => ({
+                    index: p.index,
+                    text: p.text,
+                    dwell_ms: p.dwell_ms || window._arDwellMap[p.index] || 0,
+                    rescroll_count: p.rescroll_count || window._arRescrollMap[p.index] || 0
+                })),
+                language: d.language || null
+            },
+            (res) => {
+                console.log("[AR:overlay] Review sheet response:", res);
+                if (res?.items?.length) {
+                    const rows = res.items.map(item => `
+            <tr>
+              <td>${escHtml(item.term)}</td>
+              <td>
+                ${escHtml(item.definition)}
+                ${item.esl_equiv ? `<br><em style="color:#1565c0;font-size:0.9em">${escHtml(item.esl_equiv)}</em>` : ""}
+              </td>
+            </tr>`).join("");
+                    content.innerHTML = `<table>${rows}</table>`;
+                } else {
+                    content.innerHTML = "<p style='color:#999;font-size:13px'>Could not generate review sheet.</p>";
+                }
             }
-        }
-    );
+        );
+    });
 }
 
-/* ─────────────────────────────────────────
-   DESTROY — full teardown, restore page
-───────────────────────────────────────── */
+// ── Destroy ───────────────────────────────────────────────────────────────────
 function destroyReader() {
-    // Remove all injected elements
-    ["ar-overlay", "ar-toolbar", "ar-peek-bar",
-        "ar-dropzone", "ar-review-modal"]
+    console.log("[AR:overlay] destroyReader() — tearing down all AR elements");
+    ["ar-overlay", "ar-toolbar", "ar-peek-bar", "ar-dropzone", "ar-review-modal"]
         .forEach(id => document.getElementById(id)?.remove());
-
-    // Restore page scroll
     document.documentElement.style.overflow = "";
     document.body.style.overflow = "";
-
-    // Clear session storage
-    chrome.storage.local.remove("ar_state_" + location.href);
-
+    chrome.storage.local.remove("ar_session_" + location.href);
     window.__arActive = false;
 }
 
 function escHtml(str) {
-    return String(str)
+    return String(str || "")
         .replace(/&/g, "&amp;").replace(/</g, "&lt;")
         .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }

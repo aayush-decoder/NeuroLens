@@ -1,33 +1,34 @@
 # Extension Backend
 
-FastAPI service that powers the Adaptive Reader browser extension. Rewrites web page paragraphs for easier reading using Gemini 2.0 Flash, and persists reading sessions in memory.
+FastAPI service powering the Adaptive Reader browser extension. Handles authentication (JWT + DynamoDB), paragraph adaptation via Gemini 2.0 Flash, session persistence, review generation, and telemetry.
 
 ---
 
 ## Stack
 
-- Python 3.11+
-- FastAPI + Uvicorn
-- Google Gemini 2.0 Flash via `google-genai` SDK
-- Pydantic v2
-- In-memory stores (no database)
+- Python 3.11+, FastAPI, Uvicorn
+- Google Gemini 2.0 Flash (`google-genai` SDK)
+- AWS DynamoDB (user store)
+- JWT (`python-jose`), bcrypt password hashing
+- In-memory stores for sessions, cache, telemetry
 
 ---
 
 ## Setup
 
 ```bash
-cd extension-backend
 pip install -r requirements.txt
 ```
 
-Create a `.env` file:
-
+`.env`:
 ```
-GEMINI_API_KEY=your_key_here
+GEMINI_API_KEY=...
+JWT_SECRET=change-me-in-production
+DYNAMO_TABLE=ar_users
+AWS_REGION=eu-north-1
+AWS_ACCESS_KEY_ID=...
+AWS_SECRET_ACCESS_KEY=...
 ```
-
-Run the server:
 
 ```bash
 uvicorn main:app --reload --port 8000
@@ -35,11 +36,33 @@ uvicorn main:app --reload --port 8000
 
 ---
 
-## Environment Variables
+## DynamoDB Schema
 
-| Variable | Required | Description |
+Table: `ar_users`  
+Partition key: `user_id` (String)
+
+| Attribute | Type | Notes |
 |---|---|---|
-| `GEMINI_API_KEY` | Yes | Google AI Studio API key |
+| `user_id` | String (PK) | UUID v4 |
+| `username` | String | unique |
+| `email` | String | unique |
+| `password` | String | bcrypt hash |
+| `reading_level` | String | nullable |
+| `preferred_lang` | String | nullable |
+| `fatigue_score` | Number | default 0 |
+| `created_at` | String | ISO 8601 UTC |
+
+---
+
+## Authentication
+
+All endpoints except `GET /`, `POST /api/auth/register`, and `POST /api/auth/login` require a Bearer token:
+
+```
+Authorization: Bearer <access_token>
+```
+
+Tokens are HS256 JWTs, valid for 7 days. The payload contains `sub` (user_id), `email`, and `username`.
 
 ---
 
@@ -47,14 +70,58 @@ uvicorn main:app --reload --port 8000
 
 ### GET /
 
-Health check.
+Health check. No auth required.
 
-**Response**
+```json
+{ "status": "ok", "model": "gemini-2.0-flash", "endpoints": [...] }
+```
+
+---
+
+### POST /api/auth/register
+
+Create a new account. Returns a token immediately.
+
+**Request**
+```json
+{ "username": "alice", "email": "alice@example.com", "password": "secret123" }
+```
+
+**Response** `201`
+```json
+{ "access_token": "...", "token_type": "bearer", "user_id": "...", "username": "alice", "email": "alice@example.com" }
+```
+
+**Errors:** `400` email or username taken, `422` missing fields.
+
+---
+
+### POST /api/auth/login
+
+**Request**
+```json
+{ "email": "alice@example.com", "password": "secret123" }
+```
+
+**Response** `200` — same shape as register.
+
+**Errors:** `401` invalid credentials.
+
+---
+
+### GET /api/auth/me
+
+Returns the authenticated user's profile.
+
 ```json
 {
-  "status": "ok",
-  "model": "gemini-2.0-flash",
-  "endpoints": [...]
+  "user_id": "...",
+  "username": "alice",
+  "email": "alice@example.com",
+  "reading_level": null,
+  "preferred_lang": null,
+  "fatigue_score": 0,
+  "created_at": "2024-01-01T00:00:00+00:00"
 }
 ```
 
@@ -62,7 +129,7 @@ Health check.
 
 ### POST /api/adapt
 
-Rewrites a paragraph for a 7th-grade reading level. Results are cached by `sha256(paragraph + language)`.
+Rewrites a paragraph for a 7th-grade reading level. Cached by `sha256(paragraph + language)`.
 
 **Request**
 ```json
@@ -80,26 +147,13 @@ Rewrites a paragraph for a 7th-grade reading level. Results are cached by `sha25
 **Response**
 ```json
 {
-  "adapted_html": "<p>Simplified text with <em class='ar-simple'>...</em></p>",
-  "replacements": [
-    {
-      "original": "mitosis",
-      "simplified": "cell splitting",
-      "esl_equiv": "mitosis",
-      "char_offset": 12
-    }
-  ],
+  "adapted_html": "<p>...<em class='ar-simple'>...</em>...</p>",
+  "replacements": [{ "original": "...", "simplified": "...", "esl_equiv": "...", "char_offset": 0 }],
   "cache_hit": false
 }
 ```
 
-**Errors**
-
-| Status | Cause |
-|---|---|
-| 422 | Missing `paragraph` field |
-| 502 | Gemini API error (bad key, invalid request) |
-| 503 | Gemini unavailable after 3 retries |
+**Errors:** `422` missing paragraph, `502` Gemini API error, `503` Gemini unavailable after 3 retries.
 
 ---
 
@@ -115,67 +169,49 @@ Persists a reading session in memory, keyed by `session_id`.
   "scroll_pct": 0.45,
   "adapted_indices": [1, 3],
   "struggled_indices": [1, 3],
-  "dwell_map": { "1": 8000, "3": 12000 },
+  "dwell_map": { "1": 8000 },
   "rescroll_map": { "3": 2 },
   "session_elapsed_min": 7.5,
   "language": "spanish"
 }
 ```
 
-**Response**
-```json
-{ "saved": true }
-```
+**Response:** `{ "saved": true }`
 
 ---
 
 ### POST /api/session/restore
 
-Returns the most recently updated session for a given URL.
+Returns the most recently updated session for a URL.
 
-**Request**
-```json
-{ "url": "https://example.com/article" }
-```
+**Request:** `{ "url": "https://example.com/article" }`
 
-**Response (found)**
+**Response**
 ```json
 {
   "found": true,
-  "session_id": "abc123",
+  "session_id": "...",
   "scroll_pct": 0.45,
   "adapted_paragraphs": {},
-  "dwell_map": { "1": 8000 },
-  "rescroll_map": { "3": 2 },
+  "dwell_map": {},
+  "rescroll_map": {},
   "session_elapsed_min": 7.5
 }
 ```
 
-**Response (not found)**
-```json
-{ "found": false }
-```
-
-Note: `adapted_paragraphs` is always an empty map. The client must re-call `/api/adapt` for any paragraph it needs re-rendered.
+`adapted_paragraphs` is always empty — client must re-call `/api/adapt` for re-renders.
 
 ---
 
 ### POST /api/review
 
-Generates a vocabulary review sheet from paragraphs the reader struggled with. Paragraphs are sorted by struggle score (`dwell_ms + rescroll_count * 3000`) before being sent to Gemini.
+Generates a vocabulary review sheet from struggled paragraphs. Sorted by `dwell_ms + rescroll_count * 3000` before sending to Gemini.
 
 **Request**
 ```json
 {
   "session_id": "string (required)",
-  "paragraphs": [
-    {
-      "index": 2,
-      "text": "Mitosis is the process...",
-      "dwell_ms": 9000,
-      "rescroll_count": 2
-    }
-  ],
+  "paragraphs": [{ "index": 2, "text": "...", "dwell_ms": 9000, "rescroll_count": 2 }],
   "language": "french"
 }
 ```
@@ -183,24 +219,17 @@ Generates a vocabulary review sheet from paragraphs the reader struggled with. P
 **Response**
 ```json
 {
-  "items": [
-    {
-      "term": "mitosis",
-      "definition": "the process by which a cell divides into two identical cells",
-      "esl_equiv": "mitose",
-      "source_paragraph_index": 2
-    }
-  ]
+  "items": [{ "term": "...", "definition": "...", "esl_equiv": "...", "source_paragraph_index": 2 }]
 }
 ```
 
-An empty `paragraphs` array returns `{ "items": [] }` without calling Gemini.
+Empty `paragraphs` returns `{ "items": [] }` without calling Gemini.
 
 ---
 
 ### POST /api/telemetry
 
-Appends a single event to the in-memory telemetry log.
+Appends an event to the in-memory log.
 
 **Request**
 ```json
@@ -215,24 +244,19 @@ Appends a single event to the in-memory telemetry log.
 }
 ```
 
-Valid event values: `struggle_detected`, `adaptation_shown`, `peek_entered`, `session_ended`.
+Valid events: `struggle_detected`, `adaptation_shown`, `peek_entered`, `session_ended`.
 
-**Response**
-```json
-{ "ok": true }
-```
+**Response:** `{ "ok": true }`
 
 ---
 
 ## Gemini Integration
 
-The `call_gemini` helper wraps `google-genai` SDK calls with:
-
-- Model: `gemini-2.0-flash`
-- Temperature: `0.2`, max output tokens: `2048`
-- Retry logic: up to 3 attempts with exponential backoff (`2^attempt` seconds) on `ServerError` (5xx / rate-limit)
-- `ClientError` (4xx) raises immediately as HTTP 502
-- Exhausted retries raise HTTP 503
+`call_gemini` in `main.py` wraps the SDK with:
+- Model: `gemini-2.0-flash`, temperature `0.2`, max tokens `2048`
+- Retries: up to 3 on `ServerError` (5xx/rate-limit) with `2^attempt` second backoff
+- `ClientError` (4xx) → HTTP 502 immediately
+- Retries exhausted → HTTP 503
 
 ---
 
@@ -242,18 +266,15 @@ The `call_gemini` helper wraps `google-genai` SDK calls with:
 python -m pytest test/test_main.py -v
 ```
 
-All Gemini calls are mocked via `unittest.mock.AsyncMock`. No real API calls are made during tests. 38 tests cover every endpoint including cache behaviour, error paths, and input validation.
+41 tests. Gemini is mocked via `AsyncMock`. DynamoDB calls are mocked via `unittest.mock.patch`. Auth is bypassed in non-auth tests via FastAPI's `dependency_overrides`.
 
 ---
 
 ## Deployment (Render)
 
-Set the `GEMINI_API_KEY` environment variable in the Render dashboard.
-
 Start command:
-
 ```bash
 uvicorn main:app --host 0.0.0.0 --port $PORT
 ```
 
-All required packages are listed in `requirements.txt`. The service has no external database dependency — all state is in-memory and resets on restart.
+Set all `.env` variables in the Render dashboard. No database migrations needed — DynamoDB table must be created manually with `user_id` (String) as the partition key.

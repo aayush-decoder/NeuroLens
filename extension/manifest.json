@@ -9,7 +9,9 @@
         "scripting"
     ],
     "host_permissions": [
-        "<all_urls>"
+        "<all_urls>",
+        "https://enfinity-hackathon-backend.onrender.com/*",
+        "https://enfinity-hackathon.vercel.app/*"
     ],
     "background": {
         "service_worker": "background.js"

@@ -1,31 +1,138 @@
 <!DOCTYPE html>
 <html>
+
 <head>
   <meta charset="utf-8">
   <style>
-    body { font-family: sans-serif; width: 260px; padding: 16px; }
-    label { display: block; font-size: 12px; color: #666; margin-bottom: 4px; }
-    input, select { width: 100%; padding: 6px 8px; font-size: 13px;
-      border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; margin-bottom: 12px; }
-    button { width: 100%; padding: 8px; background: #4CAF50; color: #fff;
-      border: none; border-radius: 6px; font-size: 14px; cursor: pointer; }
+    body {
+      font-family: sans-serif;
+      width: 260px;
+      padding: 16px;
+      margin: 0;
+    }
+
+    h3 {
+      margin: 0 0 14px;
+      font-size: 15px;
+      font-weight: 600;
+    }
+
+    label {
+      display: block;
+      font-size: 12px;
+      color: #666;
+      margin-bottom: 4px;
+    }
+
+    input[type="email"],
+    input[type="password"] {
+      width: 100%;
+      padding: 6px 8px;
+      font-size: 13px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      box-sizing: border-box;
+      margin-bottom: 10px;
+    }
+
+    select {
+      width: 100%;
+      padding: 6px 8px;
+      font-size: 13px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      box-sizing: border-box;
+      margin-bottom: 12px;
+    }
+
+    button {
+      width: 100%;
+      padding: 8px;
+      background: #4CAF50;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      cursor: pointer;
+      margin-bottom: 6px;
+    }
+
     button:hover { background: #43A047; }
-    #status { font-size: 11px; color: #888; margin-top: 8px; text-align: center; }
+    button:disabled { background: #aaa; cursor: default; }
+
+    #btn-logout {
+      background: transparent;
+      color: #999;
+      font-size: 12px;
+      padding: 4px;
+      margin-bottom: 0;
+    }
+    #btn-logout:hover { color: #e53935; background: transparent; }
+
+    #status {
+      font-size: 11px;
+      color: #888;
+      margin-top: 6px;
+      text-align: center;
+      min-height: 16px;
+    }
+
+    #status.error { color: #e53935; }
+
+    .divider {
+      border: none;
+      border-top: 1px solid #eee;
+      margin: 12px 0;
+    }
+
+    .user-info {
+      font-size: 11px;
+      color: #555;
+      text-align: center;
+      margin-bottom: 10px;
+    }
+
+    /* sections */
+    #auth-section {}
+    #main-section { display: none; }
   </style>
 </head>
+
 <body>
-  <label>Gemini API Key</label>
-  <input type="password" id="apiKey" placeholder="AIzaSy...">
-  <label>Second language (ESL support)</label>
-  <select id="language">
-    <option value="">None</option>
-    <option value="Spanish">Spanish</option>
-    <option value="French">French</option>
-    <option value="Hindi">Hindi</option>
-    <option value="Portuguese">Portuguese</option>
-  </select>
-  <button id="activate">Activate Reader</button>
-  <div id="status"></div>
+
+  <!-- Auth section -->
+  <div id="auth-section">
+    <h3>Adaptive Reader</h3>
+    <label>Email</label>
+    <input type="email" id="auth-email" placeholder="you@example.com" />
+    <label>Password</label>
+    <input type="password" id="auth-password" placeholder="••••••••" />
+    <button id="btn-auth">Sign in / Register</button>
+    <div id="status"></div>
+  </div>
+
+  <!-- Main section (shown after auth) -->
+  <div id="main-section">
+    <h3>Adaptive Reader</h3>
+    <div class="user-info" id="user-info"></div>
+
+    <label>Second language (ESL support)</label>
+    <select id="language">
+      <option value="">None</option>
+      <option value="spanish">Spanish</option>
+      <option value="french">French</option>
+      <option value="hindi">Hindi</option>
+      <option value="portuguese">Portuguese</option>
+    </select>
+
+    <button id="activate">Activate Reader</button>
+    <div id="status"></div>
+
+    <hr class="divider">
+    <button id="btn-logout">Sign out</button>
+  </div>
+
   <script src="popup.js"></script>
 </body>
+
 </html>
