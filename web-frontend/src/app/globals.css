@@ -1,0 +1,193 @@
+@import url('https://fonts.googleapis.com/css2?family=Merriweather:ital,wght@0,300;0,400;0,700;0,900;1,300;1,400&family=Inter:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 220 20% 97%;
+    --foreground: 230 25% 12%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 230 25% 12%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 230 25% 12%;
+
+    --primary: 250 65% 58%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 172 55% 42%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 225 15% 94%;
+    --muted-foreground: 225 12% 50%;
+
+    --accent: 340 65% 58%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 72% 55%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 225 15% 90%;
+    --input: 225 15% 90%;
+    --ring: 250 65% 58%;
+
+    --radius: 0.75rem;
+
+    /* Reader-specific */
+    --reader-bg: 42 35% 97%;
+    --reader-fg: 230 20% 18%;
+    --reader-sepia: 36 40% 95%;
+    --reader-line-height: 1.8;
+    --reader-font-weight: 400;
+
+    /* Dashboard accents */
+    --coral: 12 85% 62%;
+    --teal: 172 55% 42%;
+    --violet: 250 65% 58%;
+    --amber: 38 92% 58%;
+    --sky: 205 85% 55%;
+    --rose: 340 65% 58%;
+    --emerald: 155 60% 45%;
+
+    --sidebar-background: 250 25% 98%;
+    --sidebar-foreground: 230 25% 25%;
+    --sidebar-primary: 250 65% 58%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 250 30% 95%;
+    --sidebar-accent-foreground: 250 65% 45%;
+    --sidebar-border: 225 15% 92%;
+    --sidebar-ring: 250 65% 58%;
+  }
+
+  .dark {
+    --background: 230 22% 7%;
+    --foreground: 220 20% 92%;
+
+    --card: 230 20% 11%;
+    --card-foreground: 220 20% 92%;
+
+    --popover: 230 20% 11%;
+    --popover-foreground: 220 20% 92%;
+
+    --primary: 255 70% 65%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 172 50% 48%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 230 18% 15%;
+    --muted-foreground: 225 12% 55%;
+
+    --accent: 340 60% 62%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 62% 45%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 230 18% 18%;
+    --input: 230 18% 18%;
+    --ring: 255 70% 65%;
+
+    --reader-bg: 230 22% 6%;
+    --reader-fg: 215 15% 80%;
+    --reader-sepia: 30 10% 10%;
+
+    --coral: 12 75% 58%;
+    --teal: 172 50% 48%;
+    --violet: 255 70% 65%;
+    --amber: 38 80% 52%;
+    --sky: 205 75% 52%;
+    --rose: 340 60% 62%;
+    --emerald: 155 55% 48%;
+
+    --sidebar-background: 230 22% 9%;
+    --sidebar-foreground: 220 15% 85%;
+    --sidebar-primary: 255 70% 65%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 230 20% 14%;
+    --sidebar-accent-foreground: 255 70% 72%;
+    --sidebar-border: 230 18% 16%;
+    --sidebar-ring: 255 70% 65%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-family: 'Inter', sans-serif;
+  }
+}
+
+@layer components {
+  .reader-text {
+    font-family: 'Merriweather', Georgia, serif;
+    line-height: var(--reader-line-height);
+    font-weight: var(--reader-font-weight);
+    color: hsl(var(--reader-fg));
+    background-color: hsl(var(--reader-bg));
+  }
+
+  .reader-sepia {
+    background-color: hsl(var(--reader-sepia));
+  }
+
+  .dashboard-card {
+    @apply rounded-2xl border border-border bg-card transition-all duration-200;
+    box-shadow: 0 1px 3px 0 hsl(var(--foreground) / 0.04), 0 1px 2px -1px hsl(var(--foreground) / 0.04);
+  }
+
+  .dashboard-card:hover {
+    box-shadow: 0 8px 25px -5px hsl(var(--foreground) / 0.08), 0 4px 10px -4px hsl(var(--foreground) / 0.04);
+    transform: translateY(-2px);
+  }
+
+  .gradient-teal {
+    background: linear-gradient(135deg, hsl(var(--teal)), hsl(var(--emerald)));
+  }
+
+  .gradient-coral {
+    background: linear-gradient(135deg, hsl(var(--coral)), hsl(var(--amber)));
+  }
+
+  .gradient-violet {
+    background: linear-gradient(135deg, hsl(var(--violet)), hsl(var(--sky)));
+  }
+
+  .gradient-rose {
+    background: linear-gradient(135deg, hsl(var(--rose)), hsl(var(--coral)));
+  }
+
+  .gradient-hero {
+    background: linear-gradient(135deg, hsl(var(--violet)), hsl(var(--rose) / 0.8), hsl(var(--sky)));
+  }
+
+  .dropzone-active {
+    @apply border-2 border-dashed;
+    border-color: hsl(var(--primary));
+    background-color: hsl(var(--primary) / 0.05);
+  }
+
+  .glass-card {
+    @apply rounded-2xl border border-border backdrop-blur-md;
+    background: hsl(var(--card) / 0.7);
+  }
+
+  .stat-card {
+    @apply rounded-2xl p-5 relative overflow-hidden;
+  }
+
+  .stat-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    opacity: 0.08;
+    background: radial-gradient(circle at top right, currentColor, transparent 70%);
+  }
+}
