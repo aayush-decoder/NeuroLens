@@ -21,6 +21,7 @@ model User {
 
   // Relations
   sessions ReadingSession[]
+  files    UserFile[]
 }
 
 model Content {
@@ -79,4 +80,14 @@ model Adaptation {
   modified  String
 
   createdAt DateTime @default(now())
+}
+
+model UserFile {
+  id        String   @id @default(uuid())
+  userId    String
+  url       String
+  path      String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
 }
