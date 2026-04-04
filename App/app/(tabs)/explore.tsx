@@ -1,112 +1,164 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
+import { useCallback, useMemo, useState } from 'react';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { Collapsible } from '@/components/ui/collapsible';
-import { ExternalLink } from '@/components/external-link';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Fonts } from '@/constants/theme';
+import { countWords, loadDocuments, loadSession, type ReaderDocument, type ReaderSession } from '@/lib/adaptive-store';
 
-export default function TabTwoScreen() {
+export default function DashboardScreen() {
+  const [session, setSession] = useState<ReaderSession | null>(null);
+  const [docs, setDocs] = useState<ReaderDocument[]>([]);
+
+  useFocusEffect(
+    useCallback(() => {
+      const load = async () => {
+        const [savedSession, savedDocs] = await Promise.all([loadSession(), loadDocuments()]);
+        setSession(savedSession);
+        setDocs(savedDocs);
+      };
+
+      void load();
+    }, []),
+  );
+
+  const words = useMemo(
+    () => docs.reduce((acc, doc) => acc + (doc.wordCount || countWords(doc.text)), 0),
+    [docs],
+  );
+
+  const metrics = [
+    { label: 'Comprehension', value: `${session?.comprehensionScore ?? 0}%` },
+    { label: 'Dwell', value: `${Math.round((session?.dwellMs ?? 0) / 1000)}s` },
+    { label: 'Scroll depth', value: `${session?.scrollDepth ?? 0}px` },
+    { label: 'Words loaded', value: `${words}` },
+  ];
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#D0D0D0', dark: '#353636' }}
-      headerImage={
-        <IconSymbol
-          size={310}
-          color="#808080"
-          name="chevron.left.forwardslash.chevron.right"
-          style={styles.headerImage}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText
-          type="title"
-          style={{
-            fontFamily: Fonts.rounded,
-          }}>
-          Explore
-        </ThemedText>
-      </ThemedView>
-      <ThemedText>This app includes example code to help you get started.</ThemedText>
-      <Collapsible title="File-based routing">
-        <ThemedText>
-          This app has two screens:{' '}
-          <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> and{' '}
-          <ThemedText type="defaultSemiBold">app/(tabs)/explore.tsx</ThemedText>
-        </ThemedText>
-        <ThemedText>
-          The layout file in <ThemedText type="defaultSemiBold">app/(tabs)/_layout.tsx</ThemedText>{' '}
-          sets up the tab navigator.
-        </ThemedText>
-        <ExternalLink href="https://docs.expo.dev/router/introduction">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Android, iOS, and web support">
-        <ThemedText>
-          You can open this project on Android, iOS, and the web. To open the web version, press{' '}
-          <ThemedText type="defaultSemiBold">w</ThemedText> in the terminal running this project.
-        </ThemedText>
-      </Collapsible>
-      <Collapsible title="Images">
-        <ThemedText>
-          For static images, you can use the <ThemedText type="defaultSemiBold">@2x</ThemedText> and{' '}
-          <ThemedText type="defaultSemiBold">@3x</ThemedText> suffixes to provide files for
-          different screen densities
-        </ThemedText>
-        <Image
-          source={require('@/assets/images/react-logo.png')}
-          style={{ width: 100, height: 100, alignSelf: 'center' }}
-        />
-        <ExternalLink href="https://reactnative.dev/docs/images">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Light and dark mode components">
-        <ThemedText>
-          This template has light and dark mode support. The{' '}
-          <ThemedText type="defaultSemiBold">useColorScheme()</ThemedText> hook lets you inspect
-          what the user&apos;s current color scheme is, and so you can adjust UI colors accordingly.
-        </ThemedText>
-        <ExternalLink href="https://docs.expo.dev/develop/user-interface/color-themes/">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Animations">
-        <ThemedText>
-          This template includes an example of an animated component. The{' '}
-          <ThemedText type="defaultSemiBold">components/HelloWave.tsx</ThemedText> component uses
-          the powerful{' '}
-          <ThemedText type="defaultSemiBold" style={{ fontFamily: Fonts.mono }}>
-            react-native-reanimated
-          </ThemedText>{' '}
-          library to create a waving hand animation.
-        </ThemedText>
-        {Platform.select({
-          ios: (
-            <ThemedText>
-              The <ThemedText type="defaultSemiBold">components/ParallaxScrollView.tsx</ThemedText>{' '}
-              component provides a parallax effect for the header image.
-            </ThemedText>
-          ),
-        })}
-      </Collapsible>
-    </ParallaxScrollView>
+    <ScrollView style={styles.page} contentContainerStyle={styles.content}>
+      <Text style={styles.title}>Learning Dashboard</Text>
+      <Text style={styles.subtitle}>Session telemetry, concept graph, and review signals</Text>
+
+      <View style={styles.grid}>
+        {metrics.map((metric) => (
+          <View key={metric.label} style={styles.metricCard}>
+            <Text style={styles.metricLabel}>{metric.label}</Text>
+            <Text style={styles.metricValue}>{metric.value}</Text>
+          </View>
+        ))}
+      </View>
+
+      <View style={styles.panel}>
+        <Text style={styles.panelTitle}>Contextual concept graph</Text>
+        {(session?.conceptFriction ?? []).map((node) => (
+          <View key={node.concept} style={styles.nodeRow}>
+            <View style={[styles.nodeDot, node.score > 0.6 ? styles.high : node.score > 0.35 ? styles.medium : styles.low]} />
+            <Text style={styles.nodeLabel}>{node.concept}</Text>
+            <Text style={styles.nodeValue}>{Math.round(node.score * 100)}%</Text>
+          </View>
+        ))}
+      </View>
+
+      <View style={styles.panel}>
+        <Text style={styles.panelTitle}>Review sheet</Text>
+        <Text style={styles.reviewLine}>1. Revisit high-friction vocabulary in the latest chapter.</Text>
+        <Text style={styles.reviewLine}>2. Re-read one dense section with simplification level 1.</Text>
+        <Text style={styles.reviewLine}>3. Continue 10 minutes in focus mode and check improvement.</Text>
+      </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  headerImage: {
-    color: '#808080',
-    bottom: -90,
-    left: -35,
-    position: 'absolute',
+  page: {
+    flex: 1,
+    backgroundColor: '#EEF3FA',
   },
-  titleContainer: {
+  content: {
+    paddingTop: 28,
+    paddingHorizontal: 18,
+    paddingBottom: 34,
+    gap: 12,
+  },
+  title: {
+    color: '#162642',
+    fontSize: 28,
+    fontWeight: '800',
+  },
+  subtitle: {
+    color: '#61728B',
+    fontSize: 13,
+    marginTop: -2,
+  },
+  grid: {
+    marginTop: 4,
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 8,
+  },
+  metricCard: {
+    width: '48%',
+    borderRadius: 15,
+    backgroundColor: '#FFFFFF',
+    padding: 12,
+  },
+  metricLabel: {
+    color: '#61728B',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  metricValue: {
+    marginTop: 6,
+    color: '#11203A',
+    fontSize: 23,
+    fontWeight: '800',
+  },
+  panel: {
+    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
+    padding: 14,
+    gap: 8,
+  },
+  panelTitle: {
+    color: '#162642',
+    fontSize: 17,
+    fontWeight: '800',
+  },
+  nodeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 12,
+    backgroundColor: '#F4F7FC',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 10,
+  },
+  nodeDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 999,
+  },
+  high: {
+    backgroundColor: '#D74A4A',
+  },
+  medium: {
+    backgroundColor: '#DC9540',
+  },
+  low: {
+    backgroundColor: '#44AA73',
+  },
+  nodeLabel: {
+    flex: 1,
+    color: '#213049',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  nodeValue: {
+    color: '#4D5F79',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  reviewLine: {
+    color: '#2A3C58',
+    lineHeight: 20,
+    fontSize: 14,
   },
 });
