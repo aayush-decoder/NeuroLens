@@ -3,7 +3,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   BookOpen, FolderOpen, Plus, Home, User, LogOut, Moon, Sun,
-  ChevronRight, Trash2, Settings, FilePlus
+  ChevronRight, Trash2, Settings, FilePlus, File, ChevronDown
 } from 'lucide-react';
 import {
   Sidebar,
@@ -24,7 +24,7 @@ import { useFileStore } from '@/store/fileStore';
 import { useAuth } from '@/hooks/useAuth';
 import { useProfile } from '@/hooks/useProfile';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { parseDocument } from '@/engines/documentParser';
+import { processUploadedFile } from '@/lib/document-upload';
 
 export function AppSidebar() {
   const router = useRouter();
@@ -37,11 +37,27 @@ export function AppSidebar() {
   const [showNewFolder, setShowNewFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
   const [uploadFolderId, setUploadFolderId] = useState<string | null | undefined>(undefined);
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   const folderUploadInputRef = useRef<HTMLInputElement>(null);
 
+  const toggleFolderExpand = (folderId: string) => {
+    const newExpanded = new Set(expandedFolders);
+    if (newExpanded.has(folderId)) {
+      newExpanded.delete(folderId);
+    } else {
+      newExpanded.add(folderId);
+    }
+    setExpandedFolders(newExpanded);
+  };
+
   const handleShowAllFiles = () => {
-    router.push('/');
+    router.push('/dashboard');
     window.dispatchEvent(new Event('adaptive-reader:show-all-files'));
+  };
+
+  const handleSignOut = async () => {
+    await signOut();
+    router.push('/sign-in');
   };
 
   const handleCreateFolder = () => {
@@ -66,23 +82,13 @@ export function AppSidebar() {
   const handleFolderFileInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (uploadFolderId === undefined || !e.target.files?.length) return;
 
-    const validFiles = Array.from(e.target.files).filter((f) => f.name.endsWith('.txt') || f.name.endsWith('.md'));
-    await Promise.all(
-      validFiles.map(async (file) => {
-        const text = await file.text();
-        const paragraphs = parseDocument(text, file.name);
-        addFile({
-          id: crypto.randomUUID(),
-          name: file.name.replace(/\.(txt|md)$/i, ''),
-          content: paragraphs.join('\n\n'),
-          folderId: uploadFolderId,
-          createdAt: Date.now(),
-        });
-      }),
-    );
-
-    e.target.value = '';
-    setUploadFolderId(null);
+    try {
+      const validFiles = Array.from(e.target.files).filter((f) => f.name.endsWith('.txt') || f.name.endsWith('.md'));
+      await Promise.all(validFiles.map((file) => processUploadedFile(file, uploadFolderId, addFile)));
+    } finally {
+      e.target.value = '';
+      setUploadFolderId(null);
+    }
   };
 
   const initials = profile?.display_name
@@ -125,8 +131,8 @@ export function AppSidebar() {
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton
-                  onClick={() => router.push('/')}
-                  className={isActive('/') ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium' : ''}
+                  onClick={() => router.push('/dashboard')}
+                  className={isActive('/dashboard') ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium' : ''}
                 >
                   <Home className="w-4 h-4" />
                   {!collapsed && <span>Dashboard</span>}
@@ -162,71 +168,135 @@ export function AppSidebar() {
             <SidebarMenu>
               {/* All files */}
               <SidebarMenuItem>
-                <SidebarMenuButton
-                  onClick={handleShowAllFiles}
-                  className="text-muted-foreground pr-8"
-                >
-                  <FolderOpen className="w-4 h-4" />
+                <div className="flex items-center gap-1 group/folder">
+                  <button
+                    onClick={() => toggleFolderExpand('all-files')}
+                    className="p-1 hover:bg-sidebar-accent rounded flex-shrink-0"
+                  >
+                    <ChevronDown 
+                      className={`w-4 h-4 transition-transform ${
+                        expandedFolders.has('all-files') ? '' : '-rotate-90'
+                      }`} 
+                    />
+                  </button>
+                  <SidebarMenuButton
+                    onClick={() => router.push('/dashboard')}
+                    className="flex-1 text-muted-foreground"
+                  >
+                    <FolderOpen className="w-4 h-4" />
+                    {!collapsed && (
+                      <div className="flex items-center flex-1">
+                        <span>All Files</span>
+                      </div>
+                    )}
+                  </SidebarMenuButton>
                   {!collapsed && (
-                    <div className="flex items-center flex-1">
-                      <span>All Files</span>
+                    <div className="flex items-center gap-0.5 ml-auto flex-shrink-0 relative w-20">
+                      <button
+                        onClick={() => handleFolderAddFiles(null)}
+                        className="p-1 hover:bg-sidebar-accent rounded text-muted-foreground hover:text-sidebar-accent-foreground opacity-0 group-hover/folder:opacity-100 transition-opacity absolute right-0"
+                        aria-label="Add files to All Files"
+                        title="Add files to All Files"
+                      >
+                        <FilePlus className="w-4 h-4" />
+                      </button>
+                      <span className="text-[10px] text-muted-foreground bg-muted rounded-full px-1.5 py-0.5 min-w-max opacity-100 group-hover/folder:opacity-0 transition-opacity ml-auto">
+                        {files.length}
+                      </span>
                     </div>
                   )}
-                </SidebarMenuButton>
-                {!collapsed && (
-                  <>
-                    <SidebarMenuBadge className="right-1 h-auto min-w-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] leading-none text-muted-foreground transition-opacity group-hover/menu-item:opacity-0">
-                      {files.length}
-                    </SidebarMenuBadge>
-                    <SidebarMenuAction
-                      onClick={() => handleFolderAddFiles(null)}
-                      showOnHover
-                      aria-label="Add files to All Files"
-                      title="Add files to All Files"
-                    >
-                      <FilePlus className="w-3 h-3" />
-                    </SidebarMenuAction>
-                  </>
-                )}
+                </div>
               </SidebarMenuItem>
+
+              {/* Files in All Files */}
+              {expandedFolders.has('all-files') && !collapsed && (
+                <SidebarMenu className="pl-6 border-l border-sidebar-border ml-3">
+                  {files.filter(f => !f.folderId).map((file) => (
+                    <SidebarMenuItem key={file.id}>
+                      <SidebarMenuButton
+                        onClick={() => router.push(`/read/${file.id}`)}
+                        className="text-muted-foreground hover:text-foreground text-sm"
+                      >
+                        <File className="w-4 h-4" />
+                        <span className="truncate text-xs">{file.name}</span>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+                </SidebarMenu>
+              )}
 
               {folders.map(folder => {
                 const count = files.filter(f => f.folderId === folder.id).length;
+                const folderFiles = files.filter(f => f.folderId === folder.id);
+                const isExpanded = expandedFolders.has(folder.id);
                 return (
-                  <SidebarMenuItem key={folder.id}>
-                    <SidebarMenuButton className="group/folder text-muted-foreground pr-14">
-                      <FolderOpen className="w-4 h-4" style={{ color: folder.color || undefined }} />
-                      {!collapsed && (
-                        <div className="flex items-center flex-1 min-w-0">
-                          <span className="truncate">{folder.name}</span>
-                        </div>
-                      )}
-                    </SidebarMenuButton>
-                    {!collapsed && (
-                      <>
-                        <SidebarMenuBadge className="right-1 h-auto min-w-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] leading-none text-muted-foreground transition-opacity group-hover/menu-item:opacity-0">
-                          {count}
-                        </SidebarMenuBadge>
-                        <SidebarMenuAction
-                          onClick={() => handleFolderAddFiles(folder.id)}
-                          showOnHover
-                          className="right-7"
-                          aria-label={`Add files to folder ${folder.name}`}
-                          title={`Add files to folder ${folder.name}`}
+                  <div key={folder.id}>
+                    <SidebarMenuItem>
+                      <div className="flex items-center gap-1 group/folder">
+                        <button
+                          onClick={() => toggleFolderExpand(folder.id)}
+                          className="p-1 hover:bg-sidebar-accent rounded flex-shrink-0"
                         >
-                          <FilePlus className="w-3 h-3" />
-                        </SidebarMenuAction>
-                        <SidebarMenuAction
-                          onClick={() => removeFolder(folder.id)}
-                          showOnHover
-                          aria-label={`Delete folder ${folder.name}`}
-                          title={`Delete folder ${folder.name}`}
+                          <ChevronDown 
+                            className={`w-4 h-4 transition-transform ${
+                              isExpanded ? '' : '-rotate-90'
+                            }`} 
+                          />
+                        </button>
+                        <SidebarMenuButton 
+                          onClick={() => router.push(`/dashboard?folder=${folder.id}`)}
+                          className="flex-1 text-muted-foreground"
                         >
-                          <Trash2 className="w-3 h-3" />
-                        </SidebarMenuAction>
-                      </>
+                          <FolderOpen className="w-4 h-4" style={{ color: folder.color || undefined }} />
+                          {!collapsed && (
+                            <div className="flex items-center flex-1 min-w-0">
+                              <span className="truncate">{folder.name}</span>
+                            </div>
+                          )}
+                        </SidebarMenuButton>
+                        {!collapsed && (
+                          <div className="flex items-center gap-0.5 ml-auto flex-shrink-0 relative w-20">
+                            <button
+                              onClick={() => handleFolderAddFiles(folder.id)}
+                              className="p-1 hover:bg-sidebar-accent rounded text-muted-foreground hover:text-sidebar-accent-foreground opacity-0 group-hover/folder:opacity-100 transition-opacity absolute right-6"
+                              aria-label={`Add files to folder ${folder.name}`}
+                              title={`Add files to folder ${folder.name}`}
+                            >
+                              <FilePlus className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => removeFolder(folder.id)}
+                              className="p-1 hover:bg-sidebar-accent rounded text-muted-foreground hover:text-destructive opacity-0 group-hover/folder:opacity-100 transition-opacity absolute right-0"
+                              aria-label={`Delete folder ${folder.name}`}
+                              title={`Delete folder ${folder.name}`}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                            <span className="text-[10px] text-muted-foreground bg-muted rounded-full px-1.5 py-0.5 min-w-max opacity-100 group-hover/folder:opacity-0 transition-opacity ml-auto">
+                              {count}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </SidebarMenuItem>
+                    
+                    {/* Files under folder */}
+                    {isExpanded && !collapsed && (
+                      <SidebarMenu className="pl-6 border-l border-sidebar-border ml-3">
+                        {folderFiles.map((file) => (
+                          <SidebarMenuItem key={file.id}>
+                            <SidebarMenuButton
+                              onClick={() => router.push(`/read/${file.id}`)}
+                              className="text-muted-foreground hover:text-foreground text-sm"
+                            >
+                              <File className="w-4 h-4" />
+                              <span className="truncate text-xs">{file.name}</span>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                        ))}
+                      </SidebarMenu>
                     )}
-                  </SidebarMenuItem>
+                  </div>
                 );
               })}
 
@@ -288,7 +358,7 @@ export function AppSidebar() {
             )}
             {!collapsed && (
               <button
-                onClick={signOut}
+                onClick={handleSignOut}
                 className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
               >
                 <LogOut className="w-3.5 h-3.5" />

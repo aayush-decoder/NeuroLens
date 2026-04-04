@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
+import NextAuth from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { prisma } from "@/lib/prisma";
+
+const { auth } = NextAuth(authOptions as any);
 
 const s3Client = new S3Client({
   region: process.env.AWS_REGION || "us-east-1",
@@ -14,7 +16,7 @@ const s3Client = new S3Client({
 
 export async function POST(request: Request) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await auth();
 
     if (!session || !session.user || !(session.user as any).id) {
       return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });

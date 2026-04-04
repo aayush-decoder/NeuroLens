@@ -1,52 +1,102 @@
 import { useState, useEffect, useCallback } from 'react';
-
-// Mock types formerly from @supabase/supabase-js
-export interface User {
-  id: string;
-  email?: string;
-  user_metadata: any;
-}
-
-export interface Session {
-  user: User;
-}
+import { getSession, signIn as nextAuthSignIn, signOut as nextAuthSignOut } from 'next-auth/react';
+import type { Session } from 'next-auth';
+import { API_ROUTES } from '@/lib/api';
 
 export function useAuth() {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<Session['user'] | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Mock user for pure Next.js demonstration
-    const mockUser: User = {
-      id: 'demo-user-id',
-      email: 'demo@example.com',
-      user_metadata: { display_name: 'Demo Person' }
+    let active = true;
+
+    const syncSession = async () => {
+      const currentSession = await getSession();
+
+      if (!active) {
+        return;
+      }
+
+      setSession(currentSession);
+      setUser(currentSession?.user ?? null);
+      setLoading(false);
     };
-    
-    // For now, let's start with a null user to simulate a logged-out state
-    setLoading(false);
+
+    void syncSession();
+
+    return () => {
+      active = false;
+    };
   }, []);
 
   const signUp = useCallback(async (email: string, password: string, displayName?: string) => {
-    console.log('Mock sign up attempt:', { email, displayName });
-    return { data: { user: null }, error: null };
+    const username = displayName?.trim() || email.split('@')[0] || email;
+
+    const response = await fetch(API_ROUTES.register, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email,
+        password,
+        username,
+      }),
+    });
+
+    const payload = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      return {
+        data: { user: null },
+        error: new Error(payload.error || 'Signup failed'),
+      };
+    }
+
+    const signInResult = await nextAuthSignIn('credentials', {
+      redirect: false,
+      email,
+      password,
+    });
+
+    const currentSession = await getSession();
+    setSession(currentSession);
+    setUser(currentSession?.user ?? null);
+
+    return {
+      data: { user: currentSession?.user ?? null },
+      error: signInResult?.error ? new Error(signInResult.error) : null,
+    };
   }, []);
 
   const signIn = useCallback(async (email: string, password: string) => {
-    console.log('Mock sign in attempt:', { email });
-    return { data: { user: null }, error: null };
+    const result = await nextAuthSignIn('credentials', {
+      redirect: false,
+      email,
+      password,
+    });
+
+    if (result?.error) {
+      return { data: { user: null }, error: new Error(result.error) };
+    }
+
+    const currentSession = await getSession();
+    setSession(currentSession);
+    setUser(currentSession?.user ?? null);
+
+    return { data: { user: currentSession?.user ?? null }, error: null };
   }, []);
 
   const signOut = useCallback(async () => {
-    console.log('Mock sign out');
+    await nextAuthSignOut({ redirect: false });
     setUser(null);
     setSession(null);
   }, []);
 
-  const resetPassword = useCallback(async (email: string) => {
-    console.log('Mock reset password:', email);
-    return { data: {}, error: null };
+  const resetPassword = useCallback(async (_email: string) => {
+    return {
+      data: {},
+      error: new Error('Password reset is not configured yet.'),
+    };
   }, []);
 
   return { user, session, loading, signUp, signIn, signOut, resetPassword };

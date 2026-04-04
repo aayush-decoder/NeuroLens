@@ -19,6 +19,9 @@ export type ReaderSession = {
   stalledWord: string;
   stalledWordCount: number;
   conceptFriction: Array<{ concept: string; score: number }>;
+  backendSessionId?: string | null;
+  backendSyncStatus?: 'idle' | 'syncing' | 'synced' | 'error';
+  lastBackendSyncAt?: number | null;
   updatedAt: number;
 };
 
@@ -33,9 +36,12 @@ export type ReaderDocument = {
 
 export type ProfileData = {
   name: string;
+  email: string;
   grade: string;
   preferredLanguage: string;
   darkMode: boolean;
+  backupReminders: boolean;
+  lastBackupAt: number | null;
   updatedAt: number;
 };
 
@@ -55,14 +61,20 @@ export const DEFAULT_SESSION: ReaderSession = {
     { concept: 'Inference depth', score: 0.15 },
     { concept: 'Retention', score: 0.12 },
   ],
+  backendSessionId: null,
+  backendSyncStatus: 'idle',
+  lastBackendSyncAt: null,
   updatedAt: Date.now(),
 };
 
 export const DEFAULT_PROFILE: ProfileData = {
   name: 'Reader',
+  email: 'reader@example.com',
   grade: 'Grade 10',
   preferredLanguage: 'Hindi',
   darkMode: false,
+  backupReminders: true,
+  lastBackupAt: null,
   updatedAt: Date.now(),
 };
 
