@@ -13,6 +13,14 @@ export interface TelemetryState {
   paragraphEntryTime: number;
 }
 
+export interface TelemetrySnapshot {
+  paragraphs: ParagraphTelemetry[];
+  scrollVelocities: number[];
+  struggledTerms: StruggledTerm[];
+  currentParagraph: number;
+  paragraphEntryTime: number;
+}
+
 export function createTelemetryState(): TelemetryState {
   return {
     paragraphs: new Map(),
@@ -20,6 +28,26 @@ export function createTelemetryState(): TelemetryState {
     struggledTerms: [],
     currentParagraph: -1,
     paragraphEntryTime: Date.now(),
+  };
+}
+
+export function serializeTelemetryState(state: TelemetryState): TelemetrySnapshot {
+  return {
+    paragraphs: Array.from(state.paragraphs.values()),
+    scrollVelocities: [...state.scrollVelocities],
+    struggledTerms: [...state.struggledTerms],
+    currentParagraph: state.currentParagraph,
+    paragraphEntryTime: state.paragraphEntryTime,
+  };
+}
+
+export function hydrateTelemetryState(snapshot: TelemetrySnapshot): TelemetryState {
+  return {
+    paragraphs: new Map(snapshot.paragraphs.map((paragraph) => [paragraph.paragraphIndex, paragraph])),
+    scrollVelocities: [...snapshot.scrollVelocities],
+    struggledTerms: [...snapshot.struggledTerms],
+    currentParagraph: snapshot.currentParagraph,
+    paragraphEntryTime: snapshot.paragraphEntryTime,
   };
 }
 

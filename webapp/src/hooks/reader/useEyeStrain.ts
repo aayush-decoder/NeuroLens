@@ -8,11 +8,15 @@ import {
   UPDATE_INTERVAL,
 } from '@/engines/eyeStrainEngine';
 
-export function useEyeStrain() {
-  const [state, setState] = useState(createEyeStrainState());
+export function useEyeStrain(sessionStartTime?: number | null) {
+  const [state, setState] = useState(() => createEyeStrainState(sessionStartTime ?? undefined));
   const [lineHeight, setLineHeight] = useState(1.8);
   const [fontWeight, setFontWeight] = useState(400);
   const [sepiaIntensity, setSepiaIntensity] = useState(0);
+
+  useEffect(() => {
+    setState(createEyeStrainState(sessionStartTime ?? undefined));
+  }, [sessionStartTime]);
 
   useEffect(() => {
     const interval = setInterval(() => {

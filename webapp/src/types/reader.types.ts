@@ -50,9 +50,17 @@ export interface TextAdaptation {
 
 export interface ReadingSessionState {
   fileId: string;
+  sessionId?: string | null;
   scrollDepth: number;
   sessionStartTime: number;
+  sessionEndTime?: number;
   elapsedMs: number;
   adaptations: TextAdaptation[];
+  adaptedParagraphs?: Record<number, string>;
   eyeStrainLevel: number; // 0-1
+  analysis?: {
+    paragraphScores: Record<number, number>;
+    strugglingParagraphs: number[];
+  };
+  fatigueLevel?: 'LOW' | 'MEDIUM' | 'HIGH' | 'EXTREME';
 }
