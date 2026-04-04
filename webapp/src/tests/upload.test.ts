@@ -16,7 +16,7 @@ jest.mock("next-auth", () => ({
 // it will really hit S3 unless blocked.
 
 describe("Integration: /api/upload Route", () => {
-  let testUser: any;
+  let testUser: { id: string; username: string };
 
   beforeAll(async () => {
     // Create a real test user in Prisma

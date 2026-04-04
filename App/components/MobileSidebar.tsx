@@ -1,7 +1,7 @@
 import { useRouter, usePathname } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { useCallback, useState, useEffect } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
   Easing,
@@ -10,7 +10,7 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
-import { loadDocuments, loadProfile, type ReaderDocument } from '@/lib/adaptive-store';
+import { deleteDocumentById, loadDocuments, loadProfile, type ReaderDocument } from '@/lib/adaptive-store';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 /**
@@ -73,6 +73,27 @@ export default function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
   const isActive = (route: string) => {
     if (route === '/(tabs)') return pathname === '/(tabs)' || pathname.startsWith('/(tabs)/index');
     return pathname.includes(route.replace('/(tabs)/', ''));
+  };
+
+  const deleteDocument = (doc: ReaderDocument) => {
+    Alert.alert(
+      'Delete file',
+      `Delete "${doc.title}" permanently?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            void (async () => {
+              const updated = await deleteDocumentById(doc.id);
+              setDocuments(updated);
+            })();
+          },
+        },
+      ],
+      { cancelable: true },
+    );
   };
 
   return (
@@ -177,19 +198,25 @@ export default function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
             </View>
 
             {documents.slice(0, 5).map((doc) => (
-              <Pressable
-                key={doc.id}
-                style={[styles.docButton, isDark ? styles.docButtonDark : null]}
-                onPress={() => {
-                  handleNavigate('/(tabs)/reader');
-                }}>
-                <Text style={[styles.docIcon, isDark ? styles.docIconDark : null]}>📄</Text>
-                <Text
-                  style={[styles.docLabel, isDark ? styles.docLabelDark : null]}
-                  numberOfLines={1}>
-                  {doc.title}
-                </Text>
-              </Pressable>
+              <View key={doc.id} style={[styles.docRow, isDark ? styles.docRowDark : null]}>
+                <Pressable
+                  style={[styles.docButton, isDark ? styles.docButtonDark : null]}
+                  onPress={() => {
+                    handleNavigate('/(tabs)/reader');
+                  }}>
+                  <Text style={[styles.docIcon, isDark ? styles.docIconDark : null]}>📄</Text>
+                  <Text
+                    style={[styles.docLabel, isDark ? styles.docLabelDark : null]}
+                    numberOfLines={1}>
+                    {doc.title}
+                  </Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.deleteButton, isDark ? styles.deleteButtonDark : null]}
+                  onPress={() => deleteDocument(doc)}>
+                  <Text style={styles.deleteButtonText}>Delete</Text>
+                </Pressable>
+              </View>
             ))}
 
             {documents.length > 5 && (
@@ -396,6 +423,7 @@ const styles = StyleSheet.create({
     color: '#D4E2F4',
   },
   docButton: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
@@ -434,6 +462,28 @@ const styles = StyleSheet.create({
   },
   docHintDark: {
     color: '#96ABC9',
+  },
+  docRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  docRowDark: {
+    opacity: 1,
+  },
+  deleteButton: {
+    borderRadius: 8,
+    backgroundColor: '#FDEDEE',
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+  },
+  deleteButtonDark: {
+    backgroundColor: '#3A2328',
+  },
+  deleteButtonText: {
+    color: '#C43F4C',
+    fontSize: 11,
+    fontWeight: '700',
   },
   profileCard: {
     flexDirection: 'row',

@@ -14,8 +14,9 @@ import Animated, {
 import { router } from 'expo-router';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { loadAuthSession } from '@/lib/auth-store';
 
-const FLASH_DURATION_MS = 2200;
+const FLASH_DURATION_MS = 700;
 
 export default function FlashScreen() {
   const insets = useSafeAreaInsets();
@@ -36,7 +37,14 @@ export default function FlashScreen() {
     orbit.value = withRepeat(withTiming(1, { duration: 3400, easing: Easing.linear }), -1, false);
 
     const timer = setTimeout(() => {
-      router.replace('/(tabs)');
+      void loadAuthSession().then((session) => {
+        if (session) {
+          router.replace('/(tabs)');
+          return;
+        }
+
+        router.replace('/login');
+      });
     }, FLASH_DURATION_MS);
 
     return () => clearTimeout(timer);

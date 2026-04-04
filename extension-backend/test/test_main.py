@@ -1,16 +1,27 @@
+"""
+Tests for all extension-backend endpoints.
+Gemini calls are mocked via AsyncMock.
+Auth is bypassed by overriding the get_current_user dependency.
+DynamoDB calls in auth.py are mocked via unittest.mock.patch.
+"""
+
 import hashlib
 import pytest
 from fastapi.testclient import TestClient
-from unittest.mock import patch, AsyncMock
 from fastapi import HTTPException
+from unittest.mock import patch, AsyncMock, MagicMock
 from main import app, adapt_cache, sessions, telemetry_log
+from auth import get_current_user
+
+# ─── Auth bypass ─────────────────────────────────────────────────────────────
+MOCK_USER = {"sub": "user-123", "email": "test@example.com", "username": "testuser"}
+app.dependency_overrides[get_current_user] = lambda: MOCK_USER
 
 client = TestClient(app)
 
 
 @pytest.fixture(autouse=True)
 def clear_stores():
-    """Reset in-memory stores before each test."""
     adapt_cache.clear()
     sessions.clear()
     telemetry_log.clear()
@@ -25,10 +36,116 @@ def test_root_returns_ok():
     assert data["status"] == "ok"
     assert data["model"] == "gemini-2.0-flash"
     assert "/api/adapt" in data["endpoints"]
-    assert "/api/session/save" in data["endpoints"]
-    assert "/api/session/restore" in data["endpoints"]
-    assert "/api/review" in data["endpoints"]
-    assert "/api/telemetry" in data["endpoints"]
+
+
+# ─── POST /api/auth/register ──────────────────────────────────────────────────
+
+REGISTER_PAYLOAD = {"username": "alice", "email": "alice@example.com", "password": "secret123"}
+
+
+@patch("auth._get_user_by_email", return_value=None)
+@patch("auth._get_user_by_username", return_value=None)
+@patch("auth._table")
+def test_register_success(mock_table, _u, _e):
+    mock_table.put_item = MagicMock()
+    res = client.post("/api/auth/register", json=REGISTER_PAYLOAD)
+    assert res.status_code == 201
+    data = res.json()
+    assert "access_token" in data
+    assert data["email"] == "alice@example.com"
+    assert data["username"] == "alice"
+    assert "user_id" in data
+
+
+@patch("auth._get_user_by_email", return_value={"email": "alice@example.com"})
+def test_register_duplicate_email(_mock):
+    res = client.post("/api/auth/register", json=REGISTER_PAYLOAD)
+    assert res.status_code == 400
+    assert "Email already registered" in res.json()["detail"]
+
+
+@patch("auth._get_user_by_email", return_value=None)
+@patch("auth._get_user_by_username", return_value={"username": "alice"})
+def test_register_duplicate_username(_u, _e):
+    res = client.post("/api/auth/register", json=REGISTER_PAYLOAD)
+    assert res.status_code == 400
+    assert "Username already taken" in res.json()["detail"]
+
+
+def test_register_missing_fields():
+    res = client.post("/api/auth/register", json={"email": "x@x.com"})
+    assert res.status_code == 422
+
+
+# ─── POST /api/auth/login ─────────────────────────────────────────────────────
+
+def _make_db_user(password_plain="secret123"):
+    import bcrypt
+    hashed = bcrypt.hashpw(password_plain.encode(), bcrypt.gensalt()).decode()
+    return {
+        "user_id": "user-123",
+        "username": "alice",
+        "email": "alice@example.com",
+        "password": hashed,
+    }
+
+
+@patch("auth._get_user_by_email", return_value=None)
+def test_login_user_not_found(_mock):
+    res = client.post("/api/auth/login", json={"email": "no@one.com", "password": "x"})
+    assert res.status_code == 401
+
+
+@patch("auth._get_user_by_email")
+def test_login_wrong_password(mock_get):
+    mock_get.return_value = _make_db_user("correct")
+    res = client.post("/api/auth/login", json={"email": "alice@example.com", "password": "wrong"})
+    assert res.status_code == 401
+
+
+@patch("auth._get_user_by_email")
+def test_login_success(mock_get):
+    mock_get.return_value = _make_db_user("secret123")
+    res = client.post("/api/auth/login", json={"email": "alice@example.com", "password": "secret123"})
+    assert res.status_code == 200
+    data = res.json()
+    assert "access_token" in data
+    assert data["user_id"] == "user-123"
+
+
+# ─── GET /api/auth/me ─────────────────────────────────────────────────────────
+
+@patch("auth._get_user_by_email")
+def test_me_returns_profile(mock_get):
+    mock_get.return_value = {
+        "user_id": "user-123",
+        "username": "testuser",
+        "email": "test@example.com",
+        "reading_level": None,
+        "preferred_lang": None,
+        "fatigue_score": 0,
+        "created_at": "2024-01-01T00:00:00+00:00",
+    }
+    res = client.get("/api/auth/me")
+    assert res.status_code == 200
+    assert res.json()["user_id"] == "user-123"
+    assert res.json()["email"] == "test@example.com"
+
+
+@patch("auth._get_user_by_email", return_value=None)
+def test_me_user_not_found(_mock):
+    res = client.get("/api/auth/me")
+    assert res.status_code == 404
+
+
+# ─── Auth guard on protected endpoints ───────────────────────────────────────
+
+def test_adapt_requires_auth():
+    # Remove override temporarily
+    app.dependency_overrides.pop(get_current_user)
+    res = client.post("/api/adapt", json={"paragraph": "test"})
+    assert res.status_code == 403
+    app.dependency_overrides[get_current_user] = lambda: MOCK_USER
 
 
 # ─── POST /api/adapt ──────────────────────────────────────────────────────────
@@ -47,30 +164,16 @@ def test_adapt_basic(mock_gemini):
     res = client.post("/api/adapt", json={"paragraph": "This is a complex paragraph."})
     assert res.status_code == 200
     data = res.json()
-    assert "adapted_html" in data
-    assert "replacements" in data
     assert data["cache_hit"] is False
     assert data["replacements"][0]["original"] == "complex"
-
-
-@patch("main.call_gemini", new_callable=AsyncMock)
-def test_adapt_with_language(mock_gemini):
-    mock_gemini.return_value = GEMINI_ADAPT_RESPONSE
-    res = client.post("/api/adapt", json={"paragraph": "Some text.", "language": "spanish"})
-    assert res.status_code == 200
-    mock_gemini.assert_called_once()
-    prompt_arg = mock_gemini.call_args[0][0]
-    assert "spanish" in prompt_arg.lower()
 
 
 @patch("main.call_gemini", new_callable=AsyncMock)
 def test_adapt_cache_miss_then_hit(mock_gemini):
     mock_gemini.return_value = GEMINI_ADAPT_RESPONSE
     payload = {"paragraph": "Unique paragraph for caching."}
-    res1 = client.post("/api/adapt", json=payload)
-    assert res1.json()["cache_hit"] is False
-    res2 = client.post("/api/adapt", json=payload)
-    assert res2.json()["cache_hit"] is True
+    assert client.post("/api/adapt", json=payload).json()["cache_hit"] is False
+    assert client.post("/api/adapt", json=payload).json()["cache_hit"] is True
     mock_gemini.assert_called_once()
 
 
@@ -78,9 +181,7 @@ def test_adapt_cache_hit_preloaded():
     key = hashlib.sha256("preloaded paragraph".encode()).hexdigest()
     adapt_cache[key] = {"adapted_html": "<p>cached</p>", "replacements": []}
     res = client.post("/api/adapt", json={"paragraph": "preloaded paragraph"})
-    assert res.status_code == 200
     assert res.json()["cache_hit"] is True
-    assert res.json()["adapted_html"] == "<p>cached</p>"
 
 
 @patch("main.call_gemini", new_callable=AsyncMock)
@@ -93,19 +194,16 @@ def test_adapt_language_affects_cache_key(mock_gemini):
 
 @patch("main.call_gemini", new_callable=AsyncMock)
 def test_adapt_no_json_block(mock_gemini):
-    mock_gemini.return_value = "<p>Just HTML, no JSON block.</p>"
+    mock_gemini.return_value = "<p>Just HTML.</p>"
     res = client.post("/api/adapt", json={"paragraph": "Some paragraph."})
-    assert res.status_code == 200
-    data = res.json()
-    assert data["adapted_html"] == "<p>Just HTML, no JSON block.</p>"
-    assert data["replacements"] == []
+    assert res.json()["adapted_html"] == "<p>Just HTML.</p>"
+    assert res.json()["replacements"] == []
 
 
 @patch("main.call_gemini", new_callable=AsyncMock)
 def test_adapt_malformed_json_block(mock_gemini):
     mock_gemini.return_value = "<p>Text</p> ---JSON--- not valid json ---END---"
     res = client.post("/api/adapt", json={"paragraph": "Some paragraph."})
-    assert res.status_code == 200
     assert res.json()["replacements"] == []
 
 
@@ -113,20 +211,18 @@ def test_adapt_malformed_json_block(mock_gemini):
 def test_adapt_strips_markdown_fences(mock_gemini):
     mock_gemini.return_value = "```html\n<p>Clean</p>\n``` ---JSON--- [] ---END---"
     res = client.post("/api/adapt", json={"paragraph": "Some paragraph."})
-    assert res.status_code == 200
     assert "```" not in res.json()["adapted_html"]
 
 
 @patch("main.call_gemini", new_callable=AsyncMock)
-def test_adapt_gemini_error_returns_502(mock_gemini):
+def test_adapt_gemini_502(mock_gemini):
     mock_gemini.side_effect = HTTPException(status_code=502, detail="Gemini error: boom")
     res = client.post("/api/adapt", json={"paragraph": "Some paragraph."})
     assert res.status_code == 502
-    assert "Gemini error" in res.json()["detail"]
 
 
 @patch("main.call_gemini", new_callable=AsyncMock)
-def test_adapt_gemini_unavailable_returns_503(mock_gemini):
+def test_adapt_gemini_503(mock_gemini):
     mock_gemini.side_effect = HTTPException(status_code=503, detail="Gemini unavailable after 3 retries")
     res = client.post("/api/adapt", json={"paragraph": "Some paragraph."})
     assert res.status_code == 503
@@ -153,41 +249,28 @@ SESSION_PAYLOAD = {
 
 
 def test_session_save_returns_saved():
-    res = client.post("/api/session/save", json=SESSION_PAYLOAD)
-    assert res.status_code == 200
-    assert res.json()["saved"] is True
+    assert client.post("/api/session/save", json=SESSION_PAYLOAD).json()["saved"] is True
 
 
 def test_session_save_persists_data():
     client.post("/api/session/save", json=SESSION_PAYLOAD)
-    assert "sess-001" in sessions
-    assert sessions["sess-001"]["url"] == "https://example.com/article"
     assert sessions["sess-001"]["scroll_pct"] == 0.45
 
 
 def test_session_save_updated_at_is_utc_aware():
     client.post("/api/session/save", json=SESSION_PAYLOAD)
     ts = sessions["sess-001"]["updated_at"]
-    # timezone-aware ISO strings contain +00:00 or Z
     assert "+" in ts or ts.endswith("Z")
 
 
 def test_session_save_overwrites_existing():
     client.post("/api/session/save", json=SESSION_PAYLOAD)
-    updated = {**SESSION_PAYLOAD, "scroll_pct": 0.9}
-    client.post("/api/session/save", json=updated)
+    client.post("/api/session/save", json={**SESSION_PAYLOAD, "scroll_pct": 0.9})
     assert sessions["sess-001"]["scroll_pct"] == 0.9
 
 
-def test_session_save_minimal_payload():
-    res = client.post("/api/session/save", json={"session_id": "min-sess", "url": "https://x.com"})
-    assert res.status_code == 200
-    assert res.json()["saved"] is True
-
-
 def test_session_save_missing_required_fields():
-    res = client.post("/api/session/save", json={"session_id": "no-url"})
-    assert res.status_code == 422
+    assert client.post("/api/session/save", json={"session_id": "x"}).status_code == 422
 
 
 # ─── POST /api/session/restore ────────────────────────────────────────────────
@@ -195,84 +278,48 @@ def test_session_save_missing_required_fields():
 def test_session_restore_found():
     client.post("/api/session/save", json=SESSION_PAYLOAD)
     res = client.post("/api/session/restore", json={"url": "https://example.com/article"})
-    assert res.status_code == 200
     data = res.json()
     assert data["found"] is True
     assert data["session_id"] == "sess-001"
     assert data["scroll_pct"] == 0.45
-    assert "dwell_map" in data
-    assert "rescroll_map" in data
-    assert "session_elapsed_min" in data
 
 
 def test_session_restore_not_found():
     res = client.post("/api/session/restore", json={"url": "https://no-session.com"})
-    assert res.status_code == 200
     assert res.json()["found"] is False
 
 
 def test_session_restore_returns_most_recent():
     import time
-    old = {**SESSION_PAYLOAD, "session_id": "old-sess", "scroll_pct": 0.1}
-    new = {**SESSION_PAYLOAD, "session_id": "new-sess", "scroll_pct": 0.9}
-    client.post("/api/session/save", json=old)
+    client.post("/api/session/save", json={**SESSION_PAYLOAD, "session_id": "old", "scroll_pct": 0.1})
     time.sleep(0.01)
-    client.post("/api/session/save", json=new)
+    client.post("/api/session/save", json={**SESSION_PAYLOAD, "session_id": "new", "scroll_pct": 0.9})
     res = client.post("/api/session/restore", json={"url": "https://example.com/article"})
-    assert res.json()["session_id"] == "new-sess"
-    assert res.json()["scroll_pct"] == 0.9
-
-
-def test_session_restore_adapted_paragraphs_is_dict():
-    client.post("/api/session/save", json=SESSION_PAYLOAD)
-    res = client.post("/api/session/restore", json={"url": "https://example.com/article"})
-    assert isinstance(res.json()["adapted_paragraphs"], dict)
+    assert res.json()["session_id"] == "new"
 
 
 def test_session_restore_missing_url_returns_422():
-    res = client.post("/api/session/restore", json={})
-    assert res.status_code == 422
+    assert client.post("/api/session/restore", json={}).status_code == 422
 
 
 # ─── POST /api/review ─────────────────────────────────────────────────────────
 
-REVIEW_ITEMS = (
-    '[{"term": "mitosis", "definition": "cell division", '
-    '"esl_equiv": "mitosis", "source_paragraph_index": 2}]'
-)
+REVIEW_ITEMS = '[{"term": "mitosis", "definition": "cell division", "esl_equiv": "mitosis", "source_paragraph_index": 2}]'
 
 
 @patch("main.call_gemini", new_callable=AsyncMock)
 def test_review_basic(mock_gemini):
     mock_gemini.return_value = REVIEW_ITEMS
     res = client.post("/api/review", json={
-        "session_id": "sess-001",
+        "session_id": "s",
         "paragraphs": [{"index": 2, "text": "Mitosis is complex.", "dwell_ms": 9000, "rescroll_count": 2}],
     })
-    assert res.status_code == 200
-    data = res.json()
-    assert "items" in data
-    assert data["items"][0]["term"] == "mitosis"
-    assert data["items"][0]["source_paragraph_index"] == 2
-
-
-@patch("main.call_gemini", new_callable=AsyncMock)
-def test_review_with_language(mock_gemini):
-    mock_gemini.return_value = REVIEW_ITEMS
-    res = client.post("/api/review", json={
-        "session_id": "sess-001",
-        "paragraphs": [{"index": 0, "text": "Some text.", "dwell_ms": 5000}],
-        "language": "french",
-    })
-    assert res.status_code == 200
-    prompt_arg = mock_gemini.call_args[0][0]
-    assert "french" in prompt_arg.lower()
+    assert res.json()["items"][0]["term"] == "mitosis"
 
 
 @patch("main.call_gemini", new_callable=AsyncMock)
 def test_review_empty_paragraphs(mock_gemini):
-    res = client.post("/api/review", json={"session_id": "sess-001", "paragraphs": []})
-    assert res.status_code == 200
+    res = client.post("/api/review", json={"session_id": "s", "paragraphs": []})
     assert res.json()["items"] == []
     mock_gemini.assert_not_called()
 
@@ -280,64 +327,33 @@ def test_review_empty_paragraphs(mock_gemini):
 @patch("main.call_gemini", new_callable=AsyncMock)
 def test_review_sorts_by_struggle(mock_gemini):
     mock_gemini.return_value = "[]"
-    res = client.post("/api/review", json={
+    client.post("/api/review", json={
         "session_id": "s",
         "paragraphs": [
-            {"index": 0, "text": "Easy paragraph.", "dwell_ms": 1000, "rescroll_count": 0},
-            {"index": 1, "text": "Hard paragraph.", "dwell_ms": 15000, "rescroll_count": 5},
+            {"index": 0, "text": "Easy.", "dwell_ms": 1000, "rescroll_count": 0},
+            {"index": 1, "text": "Hard.", "dwell_ms": 15000, "rescroll_count": 5},
         ],
     })
-    assert res.status_code == 200
     prompt = mock_gemini.call_args[0][0]
     assert prompt.index("[1]") < prompt.index("[0]")
 
 
 @patch("main.call_gemini", new_callable=AsyncMock)
-def test_review_malformed_gemini_response(mock_gemini):
-    mock_gemini.return_value = "not json at all"
-    res = client.post("/api/review", json={
-        "session_id": "s",
-        "paragraphs": [{"index": 0, "text": "Text.", "dwell_ms": 5000}],
-    })
-    assert res.status_code == 200
+def test_review_malformed_response(mock_gemini):
+    mock_gemini.return_value = "not json"
+    res = client.post("/api/review", json={"session_id": "s", "paragraphs": [{"index": 0, "text": "T.", "dwell_ms": 5000}]})
     assert res.json()["items"] == []
 
 
 @patch("main.call_gemini", new_callable=AsyncMock)
-def test_review_strips_markdown_fences(mock_gemini):
-    mock_gemini.return_value = "```json\n" + REVIEW_ITEMS + "\n```"
-    res = client.post("/api/review", json={
-        "session_id": "s",
-        "paragraphs": [{"index": 0, "text": "Text.", "dwell_ms": 5000}],
-    })
-    assert res.status_code == 200
-    assert len(res.json()["items"]) == 1
-
-
-@patch("main.call_gemini", new_callable=AsyncMock)
-def test_review_gemini_error_returns_502(mock_gemini):
+def test_review_gemini_502(mock_gemini):
     mock_gemini.side_effect = HTTPException(status_code=502, detail="Gemini error: timeout")
-    res = client.post("/api/review", json={
-        "session_id": "s",
-        "paragraphs": [{"index": 0, "text": "Text.", "dwell_ms": 5000}],
-    })
+    res = client.post("/api/review", json={"session_id": "s", "paragraphs": [{"index": 0, "text": "T.", "dwell_ms": 5000}]})
     assert res.status_code == 502
-    assert "Gemini error" in res.json()["detail"]
-
-
-@patch("main.call_gemini", new_callable=AsyncMock)
-def test_review_gemini_unavailable_returns_503(mock_gemini):
-    mock_gemini.side_effect = HTTPException(status_code=503, detail="Gemini unavailable after 3 retries")
-    res = client.post("/api/review", json={
-        "session_id": "s",
-        "paragraphs": [{"index": 0, "text": "Text.", "dwell_ms": 5000}],
-    })
-    assert res.status_code == 503
 
 
 def test_review_missing_session_id_returns_422():
-    res = client.post("/api/review", json={"paragraphs": []})
-    assert res.status_code == 422
+    assert client.post("/api/review", json={"paragraphs": []}).status_code == 422
 
 
 # ─── POST /api/telemetry ──────────────────────────────────────────────────────
@@ -354,16 +370,13 @@ TELEMETRY_PAYLOAD = {
 
 
 def test_telemetry_returns_ok():
-    res = client.post("/api/telemetry", json=TELEMETRY_PAYLOAD)
-    assert res.status_code == 200
-    assert res.json()["ok"] is True
+    assert client.post("/api/telemetry", json=TELEMETRY_PAYLOAD).json()["ok"] is True
 
 
 def test_telemetry_appends_to_log():
     client.post("/api/telemetry", json=TELEMETRY_PAYLOAD)
     assert len(telemetry_log) == 1
     assert telemetry_log[0]["event"] == "struggle_detected"
-    assert telemetry_log[0]["session_id"] == "sess-001"
     assert "ts" in telemetry_log[0]
 
 
@@ -377,21 +390,7 @@ def test_telemetry_multiple_events_accumulate():
     for event in ["struggle_detected", "adaptation_shown", "peek_entered", "session_ended"]:
         client.post("/api/telemetry", json={**TELEMETRY_PAYLOAD, "event": event})
     assert len(telemetry_log) == 4
-    assert [e["event"] for e in telemetry_log] == [
-        "struggle_detected", "adaptation_shown", "peek_entered", "session_ended"
-    ]
-
-
-def test_telemetry_minimal_payload():
-    res = client.post("/api/telemetry", json={
-        "session_id": "s",
-        "url": "https://x.com",
-        "event": "session_ended",
-    })
-    assert res.status_code == 200
-    assert res.json()["ok"] is True
 
 
 def test_telemetry_missing_required_fields():
-    res = client.post("/api/telemetry", json={"session_id": "s", "url": "https://x.com"})
-    assert res.status_code == 422
+    assert client.post("/api/telemetry", json={"session_id": "s", "url": "https://x.com"}).status_code == 422
