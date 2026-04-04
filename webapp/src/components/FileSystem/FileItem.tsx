@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { FileText, Clock, Trash2, BookOpen } from 'lucide-react';
-import { ReaderFile } from '@/types/reader.types';
+import { ReaderFile, Folder } from '@/types/reader.types';
 import { estimateReadingTime, getWordCount } from '@/engines/documentParser';
 
 interface Props {
@@ -9,13 +9,32 @@ interface Props {
   onOpen: (id: string) => void;
   onDelete: (id: string) => void;
   index: number;
+  allFiles?: ReaderFile[];
+  folders?: Folder[];
+  showingAllFiles?: boolean;
 }
 
-export default function FileItem({ file, onOpen, onDelete, index }: Props) {
+export default function FileItem({ file, onOpen, onDelete, index, allFiles = [], folders = [], showingAllFiles = false }: Props) {
   const paragraphs = file.content.split('\n\n');
   const wordCount = getWordCount(paragraphs);
   const readTime = estimateReadingTime(wordCount);
   const progress = file.scrollDepth ? Math.round(file.scrollDepth * 100) : 0;
+
+  // Check if there are duplicate file names when showing all files
+  const hasDuplicates = showingAllFiles && allFiles.filter(f => f.name === file.name).length > 1;
+  
+  // Get the folder name for this file
+  let folderName = '';
+  if (hasDuplicates) {
+    if (file.folderId) {
+      const folder = folders.find(f => f.id === file.folderId);
+      folderName = folder?.name || 'Unknown Folder';
+    } else {
+      folderName = 'Suggested Files';
+    }
+  }
+
+  const displayName = hasDuplicates ? `${file.name} (${folderName})` : file.name;
 
   return (
     <motion.div
@@ -35,7 +54,7 @@ export default function FileItem({ file, onOpen, onDelete, index }: Props) {
         </motion.div>
         <div className="flex-1 min-w-0">
           <h3 className="font-semibold text-foreground truncate text-base group-hover:text-primary transition-colors">
-            {file.name}
+            {displayName}
           </h3>
           <div className="flex items-center gap-4 mt-1.5 text-xs text-muted-foreground font-medium">
             <span className="flex items-center gap-1">
@@ -70,7 +89,7 @@ export default function FileItem({ file, onOpen, onDelete, index }: Props) {
           onClick={(e) => { e.stopPropagation(); onDelete(file.id); }}
           className="opacity-0 group-hover:opacity-100 transition-opacity p-2 rounded-lg hover:bg-destructive/15 text-muted-foreground hover:text-destructive flex-shrink-0"
         >
-          <Trash2 className="w-4 h-4" />
+          <Trash2 className="w-6 h-6" />
         </motion.button>
       </div>
     </motion.div>

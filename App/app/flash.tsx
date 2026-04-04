@@ -65,7 +65,7 @@ export default function FlashScreen() {
         </Animated.View>
 
         <Animated.Text entering={FadeInDown.duration(500).delay(90)} style={[styles.title, isDark ? styles.titleDark : null]}>
-          Enfinity Reader
+          NeuroLens Reader
         </Animated.Text>
         <Animated.Text
           entering={FadeInDown.duration(500).delay(170)}
