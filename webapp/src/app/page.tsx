@@ -3,19 +3,16 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
-import AuthPage from '@/screens/AuthPage';
-import Dashboard from '@/screens/Dashboard';
+import LandingPage from '@/screens/LandingPage';
 
 export default function Page() {
-  const { user, loading } = useAuth();
   const router = useRouter();
+  const { user, loading, signOut } = useAuth();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setMounted(true);
   }, []);
-
-  const DEV_BYPASS_AUTH = true; // Temporary development flag
 
   if (!mounted || loading) {
     return (
@@ -25,11 +22,12 @@ export default function Page() {
     );
   }
 
-  // Show auth page if no user and not bypassing auth
-  if (!user && !DEV_BYPASS_AUTH) {
-    return <AuthPage />;
-  }
-
-  // Show dashboard for authenticated users or in dev mode
-  return <Dashboard />;
+  return (
+    <LandingPage
+      isAuthenticated={Boolean(user)}
+      userName={user?.name ?? user?.email ?? undefined}
+      onOpenDashboard={() => router.push('/dashboard')}
+      onSignOut={signOut}
+    />
+  );
 }

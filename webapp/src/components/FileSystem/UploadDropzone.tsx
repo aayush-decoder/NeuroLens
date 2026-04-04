@@ -1,9 +1,8 @@
 import React, { useCallback, useRef, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Upload, FileText, X } from 'lucide-react';
-import { parseDocument } from '@/engines/documentParser';
-import { ReaderFile } from '@/types/reader.types';
+import { motion } from 'framer-motion';
+import { Upload } from 'lucide-react';
 import { useFileStore } from '@/store/fileStore';
+import { processUploadedFile } from '@/lib/document-upload';
 
 interface Props {
   folderId: string | null;
@@ -15,27 +14,17 @@ export default function UploadDropzone({ folderId }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const addFile = useFileStore(s => s.addFile);
 
-  const processFile = useCallback(async (file: File) => {
-    const text = await file.text();
-    const paragraphs = parseDocument(text, file.name);
-    const readerFile: ReaderFile = {
-      id: crypto.randomUUID(),
-      name: file.name.replace(/\.(txt|md)$/, ''),
-      content: paragraphs.join('\n\n'),
-      folderId,
-      createdAt: Date.now(),
-    };
-    addFile(readerFile);
-  }, [folderId, addFile]);
-
   const handleFiles = useCallback(async (files: FileList | File[]) => {
     setUploading(true);
-    const validFiles = Array.from(files).filter(f =>
-      f.name.endsWith('.txt') || f.name.endsWith('.md')
-    );
-    await Promise.all(validFiles.map(processFile));
-    setUploading(false);
-  }, [processFile]);
+    try {
+      const validFiles = Array.from(files).filter(f =>
+        f.name.endsWith('.txt') || f.name.endsWith('.md')
+      );
+      await Promise.all(validFiles.map((file) => processUploadedFile(file, folderId, addFile)));
+    } finally {
+      setUploading(false);
+    }
+  }, [folderId, addFile]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();

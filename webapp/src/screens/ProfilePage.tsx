@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { User, Mail, Globe, Target, BookOpen, Save, ArrowLeft } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { User, Globe, Target, BookOpen, Save, ArrowLeft, Sparkles } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useProfile } from '@/hooks/useProfile';
 import { Button } from '@/components/ui/button';
@@ -12,6 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import DashboardLayout from '@/components/DashboardLayout';
 
 export default function ProfilePage() {
+  const router = useRouter();
   const { user, signOut } = useAuth();
   const { profile, updateProfile } = useProfile();
   const { toast } = useToast();
@@ -45,18 +47,51 @@ export default function ProfilePage() {
     setSaving(false);
   };
 
+  const handleSignOut = async () => {
+    await signOut();
+    router.push('/sign-in');
+  };
+
   const initials = form.display_name
     ? form.display_name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
     : user?.email?.[0]?.toUpperCase() || '?';
 
   return (
-    <DashboardLayout>
-      <div className="max-w-2xl mx-auto px-6 py-8">
-        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
-          <h1 className="text-2xl font-bold text-foreground mb-6">Profile</h1>
+    <DashboardLayout title="Profile">
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+        <motion.section
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="relative overflow-hidden rounded-[2rem] border border-border/60 bg-card/75 backdrop-blur-xl p-6 sm:p-8"
+        >
+          <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-accent/10" />
+          <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="space-y-3">
+              <div className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-background/70 px-4 py-2 text-sm text-muted-foreground">
+                <Sparkles className="h-4 w-4 text-primary" />
+                <span>Personal settings</span>
+              </div>
+              <div>
+                <h1 className="text-3xl font-bold tracking-tight text-foreground">Profile</h1>
+                <p className="mt-2 text-muted-foreground">
+                  Keep your reading preferences and identity aligned with the rest of the dashboard experience.
+                </p>
+              </div>
+            </div>
 
+            <button
+              onClick={() => router.push('/dashboard')}
+              className="inline-flex items-center justify-center gap-2 rounded-md border border-border bg-background/80 px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back to dashboard
+            </button>
+          </div>
+        </motion.section>
+
+        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
           {/* Avatar section */}
-          <div className="dashboard-card p-6 mb-6 flex items-center gap-5">
+          <div className="dashboard-card p-6 sm:p-7 flex items-center gap-5 bg-card/80 backdrop-blur-md">
             <Avatar className="w-20 h-20">
               <AvatarFallback className="text-2xl bg-primary/10 text-primary font-bold">
                 {initials}
@@ -69,7 +104,7 @@ export default function ProfilePage() {
           </div>
 
           {/* Form */}
-          <div className="dashboard-card p-6 space-y-5">
+          <div className="dashboard-card p-6 sm:p-7 space-y-5 bg-card/80 backdrop-blur-md">
             <div>
               <Label htmlFor="name" className="text-foreground flex items-center gap-2">
                 <User className="w-4 h-4 text-muted-foreground" /> Display Name
@@ -134,7 +169,7 @@ export default function ProfilePage() {
             </div>
 
             <div className="flex items-center justify-between pt-2">
-              <Button variant="outline" onClick={signOut} className="text-destructive border-destructive/30 hover:bg-destructive/5">
+              <Button variant="outline" onClick={handleSignOut} className="text-destructive border-destructive/30 hover:bg-destructive/5">
                 <LogOut className="w-4 h-4 mr-2" /> Sign out
               </Button>
               <Button onClick={handleSave} disabled={saving} className="gap-2">
