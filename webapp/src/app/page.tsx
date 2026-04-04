@@ -1,12 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import LandingPage from '@/screens/LandingPage';
-import Dashboard from '@/screens/Dashboard';
 
 export default function Page() {
-  const { user, loading } = useAuth();
+  const router = useRouter();
+  const { user, loading, signOut } = useAuth();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -21,10 +22,12 @@ export default function Page() {
     );
   }
 
-  // Show landing page if no user, dashboard if authenticated
-  if (!user) {
-    return <LandingPage />;
-  }
-
-  return <Dashboard />;
+  return (
+    <LandingPage
+      isAuthenticated={Boolean(user)}
+      userName={user?.name ?? user?.email ?? undefined}
+      onOpenDashboard={() => router.push('/dashboard')}
+      onSignOut={signOut}
+    />
+  );
 }

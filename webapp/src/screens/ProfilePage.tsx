@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
+import { useRouter } from 'next/navigation';
 import { User, Mail, Globe, Target, BookOpen, Save, ArrowLeft } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useProfile } from '@/hooks/useProfile';
@@ -12,6 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import DashboardLayout from '@/components/DashboardLayout';
 
 export default function ProfilePage() {
+  const router = useRouter();
   const { user, signOut } = useAuth();
   const { profile, updateProfile } = useProfile();
   const { toast } = useToast();
@@ -43,6 +45,11 @@ export default function ProfilePage() {
       toast({ title: 'Profile updated', description: 'Your changes have been saved.' });
     }
     setSaving(false);
+  };
+
+  const handleSignOut = async () => {
+    await signOut();
+    router.push('/sign-in');
   };
 
   const initials = form.display_name
@@ -134,7 +141,7 @@ export default function ProfilePage() {
             </div>
 
             <div className="flex items-center justify-between pt-2">
-              <Button variant="outline" onClick={signOut} className="text-destructive border-destructive/30 hover:bg-destructive/5">
+              <Button variant="outline" onClick={handleSignOut} className="text-destructive border-destructive/30 hover:bg-destructive/5">
                 <LogOut className="w-4 h-4 mr-2" /> Sign out
               </Button>
               <Button onClick={handleSave} disabled={saving} className="gap-2">
