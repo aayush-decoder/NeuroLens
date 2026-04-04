@@ -63,10 +63,7 @@ export default function ReaderPage({ fileId }: ReaderPageProps) {
     return () => window.removeEventListener('scroll', onScrollHandler);
   }, [handleScroll, onScroll, velocity, fileId, updateFile]);
 
-  const progress = useMemo(() => {
-    if (typeof window === 'undefined') return 0;
-    return window.scrollY / (document.documentElement.scrollHeight - window.innerHeight || 1);
-  }, [isScrolling]);
+  const progress = typeof window === 'undefined' ? 0 : window.scrollY / (document.documentElement.scrollHeight - window.innerHeight || 1);
 
   const handleEndSession = useCallback(() => {
     setShowReview(true);
