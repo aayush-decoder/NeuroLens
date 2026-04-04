@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { useRouter } from 'next/navigation';
-import { ArrowRight, BookOpen, Sparkles, FolderPlus, FileText, LibraryBig, UploadCloud } from 'lucide-react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { ArrowRight, BookOpen, Sparkles, FileText, LibraryBig, UploadCloud, ChevronLeft } from 'lucide-react';
 import { useFileStore } from '@/store/fileStore';
 import { useAuth } from '@/hooks/useAuth';
 import UploadDropzone from '@/components/FileSystem/UploadDropzone';
@@ -10,28 +10,25 @@ import DashboardLayout from '@/components/DashboardLayout';
 
 export default function Dashboard() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { files, folders, removeFile, loadFromStorage } = useFileStore();
   const { user } = useAuth();
-  const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
+  const folderId = searchParams.get('folder') || null;
+
 
   useEffect(() => {
     loadFromStorage();
   }, []);
 
-  useEffect(() => {
-    const handleShowAllFiles = () => setSelectedFolder(null);
-    window.addEventListener('adaptive-reader:show-all-files', handleShowAllFiles);
-    return () => window.removeEventListener('adaptive-reader:show-all-files', handleShowAllFiles);
-  }, []);
 
-  const filteredFiles = selectedFolder
-    ? files.filter(f => f.folderId === selectedFolder)
-    : files;
+
+  const filteredFiles = folderId ? files.filter(f => f.folderId === folderId) : files;
+  const selectedFolder = folders.find(f => f.id === folderId);
 
   const totalWords = files.reduce((sum, f) => sum + f.content.split(/\s+/).length, 0);
 
   return (
-    <DashboardLayout title="Dashboard">
+    <DashboardLayout title={selectedFolder ? selectedFolder.name : "Dashboard"}>
       <div className="px-4 sm:px-6 py-6 max-w-6xl mx-auto space-y-8">
         {/* Decorative gradient blobs */}
         <div className="fixed inset-0 -z-10 pointer-events-none">
@@ -40,6 +37,7 @@ export default function Dashboard() {
           <div className="absolute top-1/3 left-1/2 h-80 w-80 rounded-full bg-secondary/5 blur-3xl" />
         </div>
 
+        {!selectedFolder && (
         <motion.section
           initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
@@ -53,9 +51,24 @@ export default function Dashboard() {
           <div className="relative space-y-8">
             {/* Top content - Text only */}
             <div className="space-y-5">
+              {selectedFolder && (
+                <button
+                  onClick={() => router.push('/dashboard')}
+                  className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                  Back to all files
+                </button>
+              )}
               <div className="space-y-4">
                 <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-foreground leading-tight">
-                  {user?.name ? (
+                  {selectedFolder ? (
+                    <>
+                      <span className="bg-gradient-to-r from-primary via-secondary to-accent bg-clip-text text-transparent">
+                        {selectedFolder.name}
+                      </span>
+                    </>
+                  ) : user?.name ? (
                     <>
                       Welcome back,{' '}
                       <span className="bg-gradient-to-r from-primary via-secondary to-accent bg-clip-text text-transparent">
@@ -105,17 +118,7 @@ export default function Dashboard() {
                 </div>
               </motion.div>
 
-              {/* Folders Card */}
-              <motion.div whileHover={{ y: -4 }} className="stat-card gradient-teal text-primary-foreground shadow-lg shadow-teal-500/20 hover:shadow-xl hover:shadow-teal-500/30 p-6">
-                <div className="relative z-10">
-                  <div className="flex items-center gap-2 mb-3">
-                    <FolderPlus className="w-5 h-5 opacity-90" />
-                    <span className="text-xs font-semibold opacity-90 uppercase tracking-wider">Folders</span>
-                  </div>
-                  <p className="text-5xl font-bold mb-2">{folders.length}</p>
-                  <p className="text-xs opacity-75 font-medium">Collections</p>
-                </div>
-              </motion.div>
+
             </motion.div>
 
             {/* Buttons - Below stat cards */}
@@ -142,44 +145,6 @@ export default function Dashboard() {
             </motion.div>
           </div>
         </motion.section>
-
-        {/* Folder filter pills */}
-        {folders.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="flex flex-wrap gap-3"
-          >
-            <motion.button
-              whileHover={{ scale: 1.05, y: -2 }}
-              onClick={() => setSelectedFolder(null)}
-              className={`px-5 py-2.5 rounded-full text-sm font-semibold transition-all border-2 ${
-                selectedFolder === null
-                  ? 'bg-gradient-to-r from-primary to-primary/85 text-primary-foreground border-primary shadow-lg shadow-primary/30'
-                  : 'bg-background/50 text-muted-foreground border-border/40 hover:bg-primary/8 hover:border-primary/30'
-              }`}
-            >
-              All Files
-            </motion.button>
-            {folders.map((folder, idx) => (
-              <motion.button
-                key={folder.id}
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.25 + idx * 0.05 }}
-                whileHover={{ scale: 1.05, y: -2 }}
-                onClick={() => setSelectedFolder(folder.id)}
-                className={`px-5 py-2.5 rounded-full text-sm font-semibold transition-all border-2 ${
-                  selectedFolder === folder.id
-                    ? 'bg-gradient-to-r from-secondary to-secondary/85 text-primary-foreground border-secondary shadow-lg shadow-secondary/30'
-                    : 'bg-background/50 text-muted-foreground border-border/40 hover:bg-secondary/8 hover:border-secondary/30'
-                }`}
-              >
-                {folder.name}
-              </motion.button>
-            ))}
-          </motion.div>
         )}
 
         {/* Upload dropzone */}
@@ -193,7 +158,7 @@ export default function Dashboard() {
           <div className="absolute -top-20 -right-32 h-64 w-64 rounded-full bg-primary/8 blur-3xl" />
           <div className="absolute -bottom-16 -left-24 h-56 w-56 rounded-full bg-accent/8 blur-3xl" />
           <div className="relative z-10">
-            <UploadDropzone folderId={selectedFolder} />
+              <UploadDropzone folderId={null} />
           </div>
         </motion.section>
 
