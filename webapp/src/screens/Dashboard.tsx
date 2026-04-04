@@ -16,9 +16,15 @@ export default function Dashboard() {
     loadFromStorage();
   }, []);
 
+  useEffect(() => {
+    const handleShowAllFiles = () => setSelectedFolder(null);
+    window.addEventListener('adaptive-reader:show-all-files', handleShowAllFiles);
+    return () => window.removeEventListener('adaptive-reader:show-all-files', handleShowAllFiles);
+  }, []);
+
   const filteredFiles = selectedFolder
     ? files.filter(f => f.folderId === selectedFolder)
-    : files.filter(f => !f.folderId);
+    : files;
 
   const totalWords = files.reduce((sum, f) => sum + f.content.split(/\s+/).length, 0);
 

@@ -13,6 +13,7 @@ import {
   SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuButton,
+  SidebarMenuAction,
   SidebarMenuItem,
   SidebarFooter,
   SidebarHeader,
@@ -33,6 +34,11 @@ export function AppSidebar() {
   const { profile } = useProfile();
   const [showNewFolder, setShowNewFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
+
+  const handleShowAllFiles = () => {
+    router.push('/');
+    window.dispatchEvent(new Event('adaptive-reader:show-all-files'));
+  };
 
   const handleCreateFolder = () => {
     if (!newFolderName.trim()) return;
@@ -117,7 +123,7 @@ export function AppSidebar() {
               {/* All files */}
               <SidebarMenuItem>
                 <SidebarMenuButton
-                  onClick={() => router.push('/')}
+                  onClick={handleShowAllFiles}
                   className="text-muted-foreground"
                 >
                   <FolderOpen className="w-4 h-4" />
@@ -134,23 +140,25 @@ export function AppSidebar() {
                 const count = files.filter(f => f.folderId === folder.id).length;
                 return (
                   <SidebarMenuItem key={folder.id}>
-                    <SidebarMenuButton className="group/folder text-muted-foreground">
+                    <SidebarMenuButton className="group/folder text-muted-foreground pr-8">
                       <FolderOpen className="w-4 h-4" style={{ color: folder.color || undefined }} />
                       {!collapsed && (
                         <div className="flex items-center justify-between flex-1">
                           <span>{folder.name}</span>
-                          <div className="flex items-center gap-1">
-                            <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded-full">{count}</span>
-                            <button
-                              onClick={(e) => { e.stopPropagation(); removeFolder(folder.id); }}
-                              className="opacity-0 group-hover/folder:opacity-100 p-0.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-opacity"
-                            >
-                              <Trash2 className="w-3 h-3" />
-                            </button>
-                          </div>
+                          <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded-full">{count}</span>
                         </div>
                       )}
                     </SidebarMenuButton>
+                    {!collapsed && (
+                      <SidebarMenuAction
+                        onClick={() => removeFolder(folder.id)}
+                        showOnHover
+                        aria-label={`Delete folder ${folder.name}`}
+                        title={`Delete folder ${folder.name}`}
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </SidebarMenuAction>
+                    )}
                   </SidebarMenuItem>
                 );
               })}
