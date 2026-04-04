@@ -5,15 +5,15 @@ import asyncio
 from datetime import datetime, UTC
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
 import os
 
 from google import genai
-from google.genai import types
-from google.api_core.exceptions import ResourceExhausted, ServiceUnavailable, GoogleAPIError
+from google.genai import types, errors as genai_errors
+from auth import router as auth_router, get_current_user
 
 load_dotenv()
 
@@ -34,13 +34,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth_router)
+
 # ─── In-memory stores ────────────────────────────────────────────────────────
 adapt_cache: dict[str, dict] = {}
 sessions: dict[str, dict] = {}
 telemetry_log: list[dict] = []
 
 # ─── Gemini helper ───────────────────────────────────────────────────────────
-_RETRYABLE = (ResourceExhausted, ServiceUnavailable)
 _MAX_RETRIES = 3
 _BACKOFF_BASE = 2.0  # seconds
 
@@ -48,8 +49,7 @@ _BACKOFF_BASE = 2.0  # seconds
 async def call_gemini(prompt: str) -> str:
     """
     Call Gemini 2.0 Flash via the google-genai SDK.
-    Retries up to _MAX_RETRIES times on rate-limit / transient errors
-    with exponential backoff.
+    Retries on transient ServerErrors (5xx / rate-limit) with exponential backoff.
     """
     last_exc: Exception | None = None
 
@@ -69,16 +69,17 @@ async def call_gemini(prompt: str) -> str:
                 raise ValueError("Gemini returned an empty response")
             return text.strip()
 
-        except _RETRYABLE as exc:
+        except genai_errors.ServerError as exc:
+            # 5xx / rate-limit — retryable
             last_exc = exc
             wait = _BACKOFF_BASE ** attempt
             logger.warning("Gemini transient error (attempt %d/%d): %s — retrying in %.1fs",
                            attempt + 1, _MAX_RETRIES, exc, wait)
             await asyncio.sleep(wait)
 
-        except GoogleAPIError as exc:
-            # Non-retryable API error (bad key, invalid request, etc.)
-            logger.error("Gemini API error: %s", exc)
+        except genai_errors.ClientError as exc:
+            # 4xx — bad key, invalid request, not retryable
+            logger.error("Gemini client error: %s", exc)
             raise HTTPException(status_code=502, detail=f"Gemini API error: {exc}") from exc
 
         except Exception as exc:
@@ -105,7 +106,7 @@ class AdaptRequest(BaseModel):
 
 
 @app.post("/api/adapt")
-async def adapt(req: AdaptRequest):
+async def adapt(req: AdaptRequest, _user: dict = Depends(get_current_user)):
     lang_key = req.language or ""
     cache_key = hashlib.sha256(f"{req.paragraph}{lang_key}".encode()).hexdigest()
 
@@ -168,7 +169,7 @@ class SessionSaveRequest(BaseModel):
 
 
 @app.post("/api/session/save")
-async def session_save(req: SessionSaveRequest):
+async def session_save(req: SessionSaveRequest, _user: dict = Depends(get_current_user)):
     sessions[req.session_id] = {
         **req.model_dump(),
         "updated_at": datetime.now(UTC).isoformat(),
@@ -184,7 +185,7 @@ class SessionRestoreRequest(BaseModel):
 
 
 @app.post("/api/session/restore")
-async def session_restore(req: SessionRestoreRequest):
+async def session_restore(req: SessionRestoreRequest, _user: dict = Depends(get_current_user)):
     matching = [s for s in sessions.values() if s.get("url") == req.url]
     if not matching:
         return {"found": False}
@@ -219,7 +220,7 @@ class ReviewRequest(BaseModel):
 
 
 @app.post("/api/review")
-async def review(req: ReviewRequest):
+async def review(req: ReviewRequest, _user: dict = Depends(get_current_user)):
     if not req.paragraphs:
         return {"items": []}
 
@@ -272,7 +273,7 @@ class TelemetryRequest(BaseModel):
 
 
 @app.post("/api/telemetry")
-async def telemetry(req: TelemetryRequest):
+async def telemetry(req: TelemetryRequest, _user: dict = Depends(get_current_user)):
     telemetry_log.append({
         **req.model_dump(),
         "ts": datetime.now(UTC).isoformat(),

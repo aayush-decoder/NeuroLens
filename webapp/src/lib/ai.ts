@@ -4,11 +4,11 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
 
-export async function adaptParagraphSupport(
-  text: string, 
-  targetLang: string, 
-  isLongStall: boolean
-) {
+const model = genAI.getGenerativeModel({
+  model: "gemini-2.0-flash",
+});
+
+export async function simplifyParagraph(text: string) {
   try {
     const prompt = isLongStall 
       ? `The user is struggling heavily with this paragraph. 
