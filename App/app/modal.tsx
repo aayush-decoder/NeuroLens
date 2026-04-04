@@ -15,6 +15,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { countWords, loadDocuments, saveDocuments, stripFormatting } from '@/lib/adaptive-store';
+import { adaptText, getBackendBaseUrl } from '@/lib/backend-api';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 export default function ModalScreen() {
@@ -26,6 +27,7 @@ export default function ModalScreen() {
   const [title, setTitle] = useState('Untitled Document');
   const [savedState, setSavedState] = useState('');
   const [importing, setImporting] = useState(false);
+  const [refining, setRefining] = useState(false);
 
   const cleaned = stripFormatting(rawText);
 
@@ -83,6 +85,26 @@ export default function ModalScreen() {
       setSavedState('Unable to import this file. Choose a UTF-8 text file (.txt, .md, .json).');
     } finally {
       setImporting(false);
+    }
+  };
+
+  const refineWithBackend = async () => {
+    if (!cleaned) {
+      setSavedState('Add text first before backend refinement.');
+      return;
+    }
+
+    try {
+      setRefining(true);
+      const adapted = await adaptText(cleaned, []);
+      if (adapted.trim()) {
+        setRawText(adapted);
+        setSavedState('AI refinement synced from backend.');
+      }
+    } catch {
+      setSavedState('Backend refinement unavailable right now.');
+    } finally {
+      setRefining(false);
     }
   };
 
@@ -155,6 +177,21 @@ export default function ModalScreen() {
         </Pressable>
       </Animated.View>
 
+      <Animated.View entering={FadeInDown.duration(340).delay(250)}>
+        <Pressable
+          style={[
+            styles.importFromPhoneButton,
+            isDark ? styles.importFromPhoneButtonDark : null,
+            refining ? styles.importFromPhoneButtonDisabled : null,
+          ]}
+          onPress={refineWithBackend}
+          disabled={refining}>
+          <Text style={[styles.importFromPhoneButtonText, isDark ? styles.importFromPhoneButtonTextDark : null]}>
+            {refining ? 'Refining...' : 'Refine with AI backend'}
+          </Text>
+        </Pressable>
+      </Animated.View>
+
       <Text style={[styles.previewLabel, isDark ? styles.previewLabelDark : null]}>Clean preview</Text>
       <Animated.View entering={FadeInDown.duration(340).delay(260)} style={[styles.previewBox, isDark ? styles.previewBoxDark : null]}>
         <Text style={[styles.previewText, isDark ? styles.previewTextDark : null]}>{cleaned || 'No text yet.'}</Text>
@@ -167,6 +204,7 @@ export default function ModalScreen() {
       </Animated.View>
 
       {savedState ? <Text style={[styles.savedState, isDark ? styles.savedStateDark : null]}>{savedState}</Text> : null}
+      <Text style={[styles.fieldLabel, isDark ? styles.fieldLabelDark : null]}>Connected backend: {getBackendBaseUrl()}</Text>
 
       <Link href="/(tabs)" dismissTo style={styles.link}>
         <Text style={[styles.linkText, isDark ? styles.linkTextDark : null]}>Back to Home</Text>

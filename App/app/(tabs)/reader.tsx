@@ -24,6 +24,13 @@ import {
   type ReaderDocument,
   type ReaderSession,
 } from '@/lib/adaptive-store';
+import {
+  adaptText,
+  analyzeSession,
+  endBackendSession,
+  sendTelemetryEvent,
+  startBackendSession,
+} from '@/lib/backend-api';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 const BASE_PARAGRAPHS = [
@@ -75,8 +82,17 @@ export default function ReaderScreen() {
   const [cognateMode, setCognateMode] = useState(false);
   const [focusMode, setFocusMode] = useState(true);
   const [preferredLanguage, setPreferredLanguage] = useState('Hindi');
+  const [profileIdentity, setProfileIdentity] = useState({
+    name: 'Reader',
+    email: 'reader@example.com',
+  });
+  const [adaptedParagraphs, setAdaptedParagraphs] = useState<string[] | null>(null);
+  const [adaptStatus, setAdaptStatus] = useState<'idle' | 'running' | 'ready' | 'error'>('idle');
 
   const lastTick = useRef(Date.now());
+  const lastTelemetrySync = useRef(0);
+  const backendSessionRef = useRef<string | null>(null);
+  const lastAdaptSessionRef = useRef<string | null>(null);
   const chrome = useSharedValue(1);
   const fatigue = useSharedValue(0);
   const themeShift = useSharedValue(1);
@@ -92,6 +108,10 @@ export default function ReaderScreen() {
         setSession(savedSession);
         setDocuments(savedDocuments);
         setPreferredLanguage(profile.preferredLanguage);
+        setProfileIdentity({
+          name: profile.name,
+          email: profile.email,
+        });
       };
 
       void loadAll();
@@ -145,10 +165,13 @@ export default function ReaderScreen() {
       .slice(0, 18);
   }, [primaryDocument]);
 
+  const renderedParagraphs = adaptedParagraphs && session.simplificationLevel > 0 ? adaptedParagraphs : paragraphs;
+  const useLocalRewrite = !adaptedParagraphs;
+
   const estimatedReadMinutes = useMemo(() => {
-    const words = paragraphs.join(' ').split(/\s+/).filter(Boolean).length;
+    const words = renderedParagraphs.join(' ').split(/\s+/).filter(Boolean).length;
     return Math.max(1, Math.ceil(words / 180));
-  }, [paragraphs]);
+  }, [renderedParagraphs]);
 
   const simplifiedTextRatio = useMemo(() => {
     if (session.simplificationLevel === 0) {
@@ -161,14 +184,176 @@ export default function ReaderScreen() {
   }, [session.simplificationLevel]);
 
   const cognateHits = useMemo(() => {
-    const merged = paragraphs.join(' ').toLowerCase();
+    const merged = renderedParagraphs.join(' ').toLowerCase();
     return Object.keys(SIMPLE_MAP).filter((word) => new RegExp(`\\b${word}\\b`, 'i').test(merged)).length;
-  }, [paragraphs]);
+  }, [renderedParagraphs]);
 
   const readingProgress = useMemo(() => {
-    const maxDepth = paragraphs.length * 320;
+    const maxDepth = renderedParagraphs.length * 320;
     return Math.min(100, Math.round((session.scrollDepth / Math.max(1, maxDepth)) * 100));
-  }, [paragraphs.length, session.scrollDepth]);
+  }, [renderedParagraphs.length, session.scrollDepth]);
+
+  useEffect(() => {
+    backendSessionRef.current = session.backendSessionId ?? null;
+  }, [session.backendSessionId]);
+
+  useEffect(() => {
+    return () => {
+      if (backendSessionRef.current) {
+        void endBackendSession(backendSessionRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!primaryDocument) {
+      return;
+    }
+
+    let active = true;
+
+    setSession((prev) => {
+      if (prev.backendSessionId) {
+        return prev;
+      }
+
+      const next: ReaderSession = { ...prev, backendSyncStatus: 'syncing', updatedAt: Date.now() };
+      void saveSession(next);
+      return next;
+    });
+
+    void startBackendSession(profileIdentity.email || profileIdentity.name, primaryDocument.id)
+      .then((remoteSession) => {
+        if (!active) {
+          return;
+        }
+
+        const now = Date.now();
+        setSession((prev) => {
+          const next: ReaderSession = {
+            ...prev,
+            backendSessionId: remoteSession.id,
+            backendSyncStatus: 'synced',
+            lastBackendSyncAt: now,
+            updatedAt: now,
+          };
+          void saveSession(next);
+          return next;
+        });
+      })
+      .catch(() => {
+        if (!active) {
+          return;
+        }
+
+        setSession((prev) => {
+          const next: ReaderSession = { ...prev, backendSyncStatus: 'error', updatedAt: Date.now() };
+          void saveSession(next);
+          return next;
+        });
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [primaryDocument, profileIdentity.email, profileIdentity.name]);
+
+  useEffect(() => {
+    if (!session.backendSessionId) {
+      return;
+    }
+
+    const now = Date.now();
+    if (now - lastTelemetrySync.current < 1500) {
+      return;
+    }
+    lastTelemetrySync.current = now;
+
+    void sendTelemetryEvent({
+      sessionId: session.backendSessionId,
+      type: 'scroll',
+      value: Math.round(session.scrollVelocity * 1000),
+      meta: {
+        scrollDepth: session.scrollDepth,
+        hesitationScore: Number(session.hesitationScore.toFixed(3)),
+        simplificationLevel: session.simplificationLevel,
+        dwellMs: Math.round(session.dwellMs),
+      },
+    })
+      .then(() => {
+        setSession((prev) => {
+          if (!prev.backendSessionId) {
+            return prev;
+          }
+          const next: ReaderSession = {
+            ...prev,
+            backendSyncStatus: 'synced',
+            lastBackendSyncAt: Date.now(),
+            updatedAt: Date.now(),
+          };
+          void saveSession(next);
+          return next;
+        });
+      })
+      .catch(() => {
+        setSession((prev) => {
+          const next: ReaderSession = { ...prev, backendSyncStatus: 'error', updatedAt: Date.now() };
+          void saveSession(next);
+          return next;
+        });
+      });
+  }, [
+    session.backendSessionId,
+    session.dwellMs,
+    session.hesitationScore,
+    session.scrollDepth,
+    session.scrollVelocity,
+    session.simplificationLevel,
+  ]);
+
+  useEffect(() => {
+    if (!session.backendSessionId || !primaryDocument || session.simplificationLevel === 0) {
+      return;
+    }
+
+    if (lastAdaptSessionRef.current === session.backendSessionId && adaptedParagraphs?.length) {
+      return;
+    }
+
+    let active = true;
+    setAdaptStatus('running');
+
+    void analyzeSession(session.backendSessionId)
+      .then((analysis) => adaptText(primaryDocument.text, analysis.strugglingParagraphs || []))
+      .then((adaptedText) => {
+        if (!active) {
+          return;
+        }
+
+        const nextParagraphs = adaptedText
+          .split(/\n\n+/)
+          .map((item) => item.trim())
+          .filter(Boolean)
+          .slice(0, 18);
+
+        if (nextParagraphs.length > 0) {
+          setAdaptedParagraphs(nextParagraphs);
+          lastAdaptSessionRef.current = session.backendSessionId;
+          setAdaptStatus('ready');
+        } else {
+          setAdaptStatus('error');
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setAdaptStatus('error');
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [adaptedParagraphs?.length, primaryDocument, session.backendSessionId, session.simplificationLevel]);
 
   const applyTelemetry = useCallback((offsetY: number, velocity: number) => {
     const now = Date.now();
@@ -269,10 +454,10 @@ export default function ReaderScreen() {
 
   const lineHeight = (focusMode ? 35 : 31) + Math.round(session.eyeStrainLoad * 8);
   const fontSize = (focusMode ? 21 : 18.5) + session.eyeStrainLoad * 1.2;
-  const headerTop = Math.max(insets.top + 8, 48);
+  const headerTop = 8;
   const scrollTop = headerTop + 78;
-  const tabBarReserve = 96;
-  const bottomOffset = Math.max(insets.bottom + tabBarReserve, 104);
+  const tabBarReserve = 0;
+  const bottomOffset = Math.max(insets.bottom + tabBarReserve, 12);
 
   return (
     <Animated.View style={[styles.screen, ambientStyle, themeShiftStyle]}>
@@ -316,9 +501,13 @@ export default function ReaderScreen() {
             <Text style={styles.metaLabel}>Language</Text>
             <Text style={styles.metaValue}>{preferredLanguage}</Text>
           </View>
+          <View style={[styles.metaChip, isDark ? styles.metaChipDark : null]}>
+            <Text style={styles.metaLabel}>Backend</Text>
+            <Text style={styles.metaValue}>{session.backendSyncStatus || 'idle'}</Text>
+          </View>
         </View>
 
-        {paragraphs.map((paragraph, index) => (
+        {renderedParagraphs.map((paragraph, index) => (
           <Pressable
             key={`${index}-${paragraph.slice(0, 16)}`}
             style={[
@@ -327,7 +516,7 @@ export default function ReaderScreen() {
               focusMode ? (isDark ? styles.paragraphBlockFocusDark : styles.paragraphBlockFocus) : null,
             ]}>
             <Text style={[styles.paragraph, isDark ? styles.paragraphDark : null, { lineHeight, fontSize }]}>
-              {rewriteText(paragraph, session.simplificationLevel, cognateMode)}
+              {rewriteText(paragraph, useLocalRewrite ? session.simplificationLevel : 0, cognateMode)}
             </Text>
           </Pressable>
         ))}
@@ -342,6 +531,9 @@ export default function ReaderScreen() {
             {cognateHits > 0
               ? `Detected ${cognateHits} target term${cognateHits > 1 ? 's' : ''} in this text.`
               : 'No mapped terms detected yet. Import richer text to see cognate annotations.'}
+          </Text>
+          <Text style={styles.sectionHint}>
+            Adaptive AI: {adaptStatus === 'running' ? 'Generating assist text...' : adaptStatus === 'ready' ? 'Assist text synced from backend.' : adaptStatus === 'error' ? 'Backend adaptation unavailable.' : 'Waiting for friction signals.'}
           </Text>
           <Pressable
             style={[styles.toggleBtn, cognateMode ? styles.toggleBtnOn : null]}
