@@ -6,9 +6,9 @@ export interface Profile {
   user_id: string;
   display_name: string | null;
   avatar_url: string | null;
-  bio: string | null;
   preferred_language: string;
-  reading_goal_minutes: number;
+  daily_goal_minutes: number;
+  reading_goal_minutes?: number;
 }
 
 export function useProfile() {
@@ -30,16 +30,20 @@ export function useProfile() {
       user_id: user.id,
       display_name: user.name || 'User',
       avatar_url: null,
-      bio: 'Just a demo user.',
       preferred_language: 'en',
-      reading_goal_minutes: 30,
+      daily_goal_minutes: 30,
     };
 
     const storedProfile = localStorage.getItem(storageKey);
     if (storedProfile) {
       try {
         const parsedProfile = JSON.parse(storedProfile) as Profile;
-        setProfile({ ...mockProfile, ...parsedProfile, user_id: user.id });
+        setProfile({
+          ...mockProfile,
+          ...parsedProfile,
+          user_id: user.id,
+          daily_goal_minutes: parsedProfile.daily_goal_minutes ?? parsedProfile.reading_goal_minutes ?? 30,
+        });
         setLoading(false);
         return;
       } catch {
@@ -62,9 +66,9 @@ export function useProfile() {
       user_id: user.id,
       display_name: updates.display_name ?? profile?.display_name ?? user.name ?? 'User',
       avatar_url: updates.avatar_url ?? profile?.avatar_url ?? null,
-      bio: updates.bio ?? profile?.bio ?? null,
       preferred_language: updates.preferred_language ?? profile?.preferred_language ?? 'en',
-      reading_goal_minutes: updates.reading_goal_minutes ?? profile?.reading_goal_minutes ?? 30,
+      daily_goal_minutes: updates.daily_goal_minutes ?? profile?.daily_goal_minutes ?? profile?.reading_goal_minutes ?? 30,
+      reading_goal_minutes: updates.daily_goal_minutes ?? updates.reading_goal_minutes ?? profile?.reading_goal_minutes ?? profile?.daily_goal_minutes ?? 30,
     };
 
     setProfile(nextProfile);
