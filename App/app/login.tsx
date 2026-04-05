@@ -9,11 +9,15 @@ import { loginFromMobile } from '@/lib/backend-api';
 import { loadAuthSession, saveAuthSession } from '@/lib/auth-store';
 import { loadProfile, saveProfile } from '@/lib/adaptive-store';
 
+const DEMO_EMAIL = 'demo@enfinity.app';
+const DEMO_PASSWORD = 'Enfinity123!';
+const DEMO_USERNAME = 'Demo Reader';
+
 export default function LoginScreen() {
   const insets = useSafeAreaInsets();
   const isDark = useColorScheme() === 'dark';
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState(DEMO_EMAIL);
+  const [password, setPassword] = useState(DEMO_PASSWORD);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -38,8 +42,31 @@ export default function LoginScreen() {
       setLoading(true);
       setError('');
 
+      const normalizedEmail = email.trim().toLowerCase();
+      if (normalizedEmail === DEMO_EMAIL && password === DEMO_PASSWORD) {
+        await saveAuthSession({
+          userId: 'demo-user',
+          username: DEMO_USERNAME,
+          email: DEMO_EMAIL,
+          createdAt: Date.now(),
+        });
+
+        void (async () => {
+          const profile = await loadProfile();
+          await saveProfile({
+            ...profile,
+            name: DEMO_USERNAME,
+            email: DEMO_EMAIL,
+            updatedAt: Date.now(),
+          });
+        })();
+
+        router.replace('/(tabs)');
+        return;
+      }
+
       const user = await loginFromMobile({
-        email: email.trim().toLowerCase(),
+        email: normalizedEmail,
         password,
       });
 
@@ -47,6 +74,7 @@ export default function LoginScreen() {
         userId: user.id,
         username: user.username,
         email: user.email,
+        accessToken: user.accessToken,
         createdAt: Date.now(),
       });
       router.replace('/(tabs)');
@@ -79,6 +107,9 @@ export default function LoginScreen() {
         <Text style={[styles.title, isDark ? styles.titleDark : null]}>Welcome back</Text>
         <Text style={[styles.sub, isDark ? styles.subDark : null]}>
           Sign in with email and password. Google login will be added next.
+        </Text>
+        <Text style={[styles.demoHint, isDark ? styles.demoHintDark : null]}>
+          Demo login: {DEMO_EMAIL} / {DEMO_PASSWORD}
         </Text>
       </Animated.View>
 
@@ -140,6 +171,13 @@ const styles = StyleSheet.create({
   titleDark: { color: '#EAF2FF' },
   sub: { color: '#61728B', fontSize: 13, textAlign: 'center' },
   subDark: { color: '#99AFCB' },
+  demoHint: {
+    color: '#4F6580',
+    fontSize: 12,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  demoHintDark: { color: '#8EA3BF' },
   card: {
     marginTop: 8,
     backgroundColor: '#FFFFFF',

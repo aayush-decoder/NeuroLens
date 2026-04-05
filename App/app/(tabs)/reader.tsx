@@ -24,6 +24,7 @@ import {
   type ReaderDocument,
   type ReaderSession,
 } from '@/lib/adaptive-store';
+import { loadAuthSession } from '@/lib/auth-store';
 import {
   adaptText,
   analyzeSession,
@@ -135,6 +136,7 @@ export default function ReaderScreen() {
   const isDark = useColorScheme() === 'dark';
   const [session, setSession] = useState<ReaderSession>(DEFAULT_SESSION);
   const [documents, setDocuments] = useState<ReaderDocument[]>([]);
+  const [authUserId, setAuthUserId] = useState<string | null>(null);
   const [cognateMode, setCognateMode] = useState(false);
   const [focusMode, setFocusMode] = useState(true);
   const [preferredLanguage, setPreferredLanguage] = useState('Hindi');
@@ -157,13 +159,15 @@ export default function ReaderScreen() {
   useFocusEffect(
     useCallback(() => {
       const loadAll = async () => {
-        const [savedSession, savedDocuments, profile] = await Promise.all([
+        const [savedSession, savedDocuments, profile, authSession] = await Promise.all([
           loadSession(),
           loadDocuments(),
           loadProfile(),
+          loadAuthSession(),
         ]);
         setSession(savedSession);
         setDocuments(savedDocuments);
+        setAuthUserId(authSession?.userId ?? null);
         setPreferredLanguage(profile.preferredLanguage);
         setProfileIdentity({
           name: profile.name,
@@ -331,6 +335,10 @@ export default function ReaderScreen() {
       return;
     }
 
+    if (!authUserId) {
+      return;
+    }
+
     let active = true;
 
     setSession((prev) => {
@@ -343,7 +351,7 @@ export default function ReaderScreen() {
       return next;
     });
 
-    void startBackendSession(profileIdentity.email || profileIdentity.name, primaryDocument.id)
+    void startBackendSession(authUserId, primaryDocument.id)
       .then((remoteSession) => {
         if (!active) {
           return;
@@ -377,7 +385,7 @@ export default function ReaderScreen() {
     return () => {
       active = false;
     };
-  }, [primaryDocument, profileIdentity.email, profileIdentity.name]);
+  }, [authUserId, primaryDocument]);
 
   useEffect(() => {
     if (!session.backendSessionId) {
@@ -459,7 +467,7 @@ export default function ReaderScreen() {
 
         if (nextParagraphs.length > 0) {
           setAdaptedParagraphs(nextParagraphs);
-          lastAdaptSessionRef.current = session.backendSessionId;
+          lastAdaptSessionRef.current = session.backendSessionId ?? null;
           setAdaptStatus('ready');
         } else {
           setAdaptStatus('error');

@@ -6,6 +6,7 @@ export type AuthSession = {
   userId: string;
   username: string;
   email: string;
+  accessToken?: string;
   createdAt: number;
 };
 
