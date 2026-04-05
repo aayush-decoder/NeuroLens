@@ -49,7 +49,17 @@ export async function POST(req: Request) {
       { status: 201 }
     );
   } catch (err) {
-    console.error("[extension/register]", err);
+    console.error("[extension/register] Error:", err instanceof Error ? err.message : err);
+    console.error("[extension/register] Full error:", err);
+    
+    if (err instanceof Error) {
+      // Check for specific error types
+      if (err.message.includes("unique constraint")) {
+        return NextResponse.json({ error: "Email or username already exists" }, { status: 409 });
+      }
+      return NextResponse.json({ error: err.message }, { status: 500 });
+    }
+    
     return NextResponse.json({ error: "Something went wrong" }, { status: 500 });
   }
 }

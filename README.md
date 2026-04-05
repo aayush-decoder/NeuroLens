@@ -1,16 +1,33 @@
-# Enfinity — Adaptive Reading Intelligence
+# NeuroLens — Adaptive Reading Intelligence
 
-Enfinity is a cross-platform adaptive reading system that transforms how people consume written content. It works across a Chrome extension, a Next.js web application, and a React Native mobile app — all sharing a single user identity, a single Postgres database, and a single AI backend. Every article you read online, every document you upload, every moment of struggle with a hard word — all of it is captured, simplified in real time, and turned into a personalized revision system.
+NeuroLens is a cross-platform adaptive reading system that transforms how people consume written content. It works across a Chrome extension, a Next.js web application, and a React Native mobile app — all sharing a single user identity, a single Postgres database, and a single AI backend. Every article you read online, every document you upload, every moment of struggle with a hard word — all of it is captured, simplified in real time, and turned into a personalized revision system.
+
+---
+
+## Demo
+
+**Watch the extension in action:**
+
+[Google Drive Demo Video](https://drive.google.com/file/d/1bMC9QY6istwydwBohA_tUArq3UZjGDfv/view?usp=drivesdk)
 
 ---
 
-## The Problem
+## The Challenge
 
-Most people read passively. They encounter hard words, slow down, re-read the same sentence three times, and move on without understanding. For children, ESL learners, and students reading dense academic or news content, this friction compounds into disengagement. No existing tool watches how you read and responds to it in real time.
+**Engineer a reading environment that actively adapts to a user's comprehension level implicitly.**
 
-Enfinity does.
+The interface must fade away completely during active reading, using background telemetry to figure out what the user understands and what they are struggling with, adjusting the text on the fly.
 
----
+## Project Structure
+
+```text
+Enfinity_hackathon/
+├── App/                  # React Native (Expo) mobile application
+├── extension/            # Chrome Extension for on-the-fly web reading
+├── extension-backend/    # FastAPI backend serving the Chrome Extension
+├── webapp/               # Next.js web application and primary dashboard
+└── docs/                 # Documentation and assets
+```
 
 ## System Architecture
 
@@ -44,6 +61,15 @@ Extension Backend (FastAPI / Render) ──────────────�
 ---
 
 ## The Chrome Extension
+
+<p float="left">
+  <img src="extension/images/Extention.png" width="45%" />
+  <img src="extension/images/Distraction%20Free%20Reader1.jpeg" width="45%" />
+  <img src="extension/images/Distraction%20Free%20Reader2.jpeg" width="45%" />
+  <img src="extension/images/Smart%20Review.jpeg" width="45%" />
+  <img src="extension/images/Concept%20Map.jpeg" width="45%" />
+  <img src="extension/images/Revision%20Sheet.png" width="45%" />
+</p>
 
 The extension is the most impactful surface. It works on any webpage — news articles, Wikipedia, academic papers, government documents — without the user having to copy or paste anything.
 
@@ -133,6 +159,16 @@ Children reading news articles or textbooks encounter vocabulary that is 2–3 g
 
 ## The Web Application
 
+<p float="left">
+  <img src="webapp/images/landingPage1.png" width="45%" />
+  <img src="webapp/images/LandingPage2.png" width="45%" />
+  <img src="webapp/images/Auth1.png" width="45%" />
+  <img src="webapp/images/Auth2.png" width="45%" />
+  <img src="webapp/images/Dashboard.png" width="45%" />
+  <img src="webapp/images/Reader.png" width="45%" />
+  <img src="webapp/images/SessionReview.png" width="45%" />
+</p>
+
 The webapp is a Next.js 16 application deployed on Vercel. It serves as the primary dashboard and document reader for uploaded content, and as the authentication authority for the entire system.
 
 ### Authentication
@@ -182,6 +218,12 @@ These settings are consumed by the mobile app's reader to adjust font weight, li
 ---
 
 ## The Mobile App
+
+<p float="left">
+  <img src="App/Images/Adaptive%20Reader.jpeg" width="30%" />
+  <img src="App/Images/Dashboard.jpeg" width="30%" />
+  <img src="App/Images/Learning%20Dashboard.jpeg" width="30%" />
+</p>
 
 The React Native app (Expo Router) provides a portable reading environment for uploaded documents. It shares the same backend as the webapp.
 

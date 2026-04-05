@@ -34,6 +34,22 @@ export async function POST(req: Request) {
       { status: 201 }
     );
   } catch (error) {
+    console.error("[register] Error:", error instanceof Error ? error.message : error);
+    console.error("[register] Full error:", error);
+    
+    if (error instanceof Error) {
+      if (error.message.includes("unique constraint")) {
+        return NextResponse.json(
+          { error: "Email or username already exists" },
+          { status: 409 }
+        );
+      }
+      return NextResponse.json(
+        { error: error.message },
+        { status: 500 }
+      );
+    }
+    
     return NextResponse.json(
       { error: "Something went wrong" },
       { status: 500 }
