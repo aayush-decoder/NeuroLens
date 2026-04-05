@@ -54,6 +54,7 @@ export default function SignupScreen() {
         userId: user.id,
         username: user.username,
         email: user.email,
+        accessToken: user.accessToken,
         createdAt: Date.now(),
       });
 

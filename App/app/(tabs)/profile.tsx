@@ -25,8 +25,8 @@ import {
   saveProfile,
   type ProfileData,
 } from '@/lib/adaptive-store';
-import { getBackendBaseUrl, registerFromMobile } from '@/lib/backend-api';
-import { clearAuthSession } from '@/lib/auth-store';
+import { getBackendBaseUrl, loginFromMobile, registerFromMobile } from '@/lib/backend-api';
+import { clearAuthSession, saveAuthSession } from '@/lib/auth-store';
 import { setPreferredColorScheme, useColorScheme } from '@/hooks/use-color-scheme';
 
 export default function ProfileScreen() {
@@ -112,6 +112,17 @@ export default function ProfileScreen() {
         username,
         email,
         password: 'Reader@12345',
+      });
+      const user = await loginFromMobile({
+        email,
+        password: 'Reader@12345',
+      });
+      await saveAuthSession({
+        userId: user.id,
+        username: user.username,
+        email: user.email,
+        accessToken: user.accessToken,
+        createdAt: Date.now(),
       });
       setStatus('Backend account connected.');
     } catch (error) {
