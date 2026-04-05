@@ -186,11 +186,11 @@ export default function LandingPage({
       {/* Header */}
       <header className="sticky top-0 z-50 border-b border-gray-200 dark:border-slate-700/40 bg-white/90 dark:bg-gradient-to-b dark:from-slate-900/90 dark:to-slate-900/70 dark:backdrop-blur-xl dark:shadow-md dark:shadow-black/30 backdrop-blur-sm transition-all duration-300">
         <div className="container max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex h-16 items-center justify-between">
-          <div className="flex items-center gap-3 group cursor-pointer">
-            <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-teal-500 via-cyan-500 to-pink-500 text-white flex items-center justify-center font-semibold shadow-md shadow-teal-500/20 transition-all duration-500 group-hover:shadow-lg group-hover:shadow-pink-500/30 group-hover:scale-110">
-              <BookOpen className="w-5 h-5 transition-transform duration-500 group-hover:rotate-12" />
+          <div className="flex items-center gap-3 group cursor-pointer" onClick={() => router.push('/')}>
+            <div className="h-10 w-10 rounded-xl overflow-hidden shadow-lg shadow-teal-500/20 transition-all duration-500 group-hover:shadow-xl group-hover:scale-110">
+              <img src="/logo.png" alt="NeuroLens Logo" className="w-full h-full object-cover" />
             </div>
-            <span className="text-lg font-semibold bg-gradient-to-r from-teal-600 via-cyan-600 to-pink-600 dark:from-teal-300 dark:via-cyan-300 dark:to-pink-300 bg-clip-text text-transparent tracking-tight transition-all duration-500 group-hover:from-teal-700 dark:group-hover:from-teal-200 group-hover:to-pink-700 dark:group-hover:to-pink-200">NeuroLens</span>
+            <span className="text-xl font-bold bg-gradient-to-r from-teal-600 via-cyan-600 to-pink-600 dark:from-teal-300 dark:via-cyan-300 dark:to-pink-300 bg-clip-text text-transparent tracking-tight">NeuroLens</span>
           </div>
           <nav className="flex items-center gap-1 sm:gap-2">
             {isAuthenticated ? (
@@ -302,7 +302,7 @@ export default function LandingPage({
             <div className="mb-8">
               <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-pink-50 dark:bg-slate-800/50 dark:backdrop-blur-md border border-pink-200 dark:border-pink-500/30 text-sm font-medium mb-8">
                 <Sparkles className="w-4 h-4 text-pink-500 dark:text-pink-400" />
-                <span className="text-gray-700 dark:text-slate-200">Adaptive reading, reimagined</span>
+                <span className="text-gray-700 dark:text-slate-200">Focus Deeper. Learn Faster.</span>
               </div>
             </div>
             <div className="space-y-8">
@@ -384,7 +384,7 @@ export default function LandingPage({
                 'shadow-teal-500/20',
                 'shadow-indigo-500/20',
               ];
-              
+
               return (
                 <div key={index} className="bg-white dark:bg-slate-800/40 dark:backdrop-blur-md rounded-2xl p-6 border border-gray-200 dark:border-slate-700/60 hover:border-pink-300 dark:hover:border-pink-500/40 hover:shadow-lg dark:hover:-translate-y-2 dark:hover:bg-slate-800/60 transition-all duration-300">
                   <div className={`inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-gradient-to-br ${colors[index % 6]} text-white mb-4 shadow-md ${shadowColors[index % 6]}`}>

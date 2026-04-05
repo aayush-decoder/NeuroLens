@@ -69,14 +69,14 @@ export function AppSidebar() {
   const handleCreateFolder = () => {
     const trimmedName = newFolderName.trim();
     if (!trimmedName) return;
-    
+
     // Check if a file with the same name already exists
     const fileNameExists = files.some(f => f.name.toLowerCase() === trimmedName.toLowerCase());
     if (fileNameExists) {
       alert(`A file named "${trimmedName}" already exists. Please choose a different folder name.`);
       return;
     }
-    
+
     addFolder({
       id: crypto.randomUUID(),
       name: trimmedName,
@@ -136,17 +136,13 @@ export function AppSidebar() {
     <Sidebar collapsible="icon">
       <SidebarHeader className="p-4">
         <div className="flex items-center gap-3">
-          <motion.div
-            animate={{ rotate: [0, 3, -3, 0] }}
-            transition={{ duration: 3, repeat: Infinity, repeatDelay: 5 }}
-            className="w-10 h-10 rounded-xl gradient-violet flex items-center justify-center flex-shrink-0"
-          >
-            <BookOpen className="w-5 h-5 text-primary-foreground" />
-          </motion.div>
+          <div className="w-10 h-10 rounded-xl overflow-hidden shadow-lg shadow-teal-500/20 flex-shrink-0">
+            <img src="/logo.png" alt="NeuroLens Logo" className="w-full h-full object-cover" />
+          </div>
           {!collapsed && (
             <div>
               <h1 className="text-base font-bold text-sidebar-foreground">NeuroLens</h1>
-              <p className="text-[10px] text-muted-foreground">Adaptive Reader</p>
+              <p className="text-[10px] text-muted-foreground">Focus Deeper. Learn Faster.</p>
             </div>
           )}
         </div>
@@ -258,13 +254,12 @@ export function AppSidebar() {
                           onClick={() => toggleFolderExpand(folder.id)}
                           className="p-1 hover:bg-sidebar-accent rounded flex-shrink-0"
                         >
-                          <ChevronDown 
-                            className={`w-4 h-4 transition-transform ${
-                              isExpanded ? '' : '-rotate-90'
-                            }`} 
+                          <ChevronDown
+                            className={`w-4 h-4 transition-transform ${isExpanded ? '' : '-rotate-90'
+                              }`}
                           />
                         </button>
-                        <SidebarMenuButton 
+                        <SidebarMenuButton
                           onClick={() => router.push(`/dashboard?folder=${folder.id}`)}
                           className="flex-1 text-muted-foreground"
                         >
@@ -300,7 +295,7 @@ export function AppSidebar() {
                         )}
                       </div>
                     </SidebarMenuItem>
-                    
+
                     {/* Files under folder */}
                     {isExpanded && !collapsed && (
                       <SidebarMenu className="pl-6 border-l border-sidebar-border ml-3">
@@ -327,12 +322,12 @@ export function AppSidebar() {
                             </div>
                           </SidebarMenuItem>
                         ))}
-                        
+
                         {/* Child folders */}
                         {getChildFolders(folder.id).map((childFolder) => {
                           const childCount = files.filter(f => f.folderId === childFolder.id).length;
                           const isChildExpanded = expandedFolders.has(childFolder.id);
-                          
+
                           return (
                             <div key={childFolder.id}>
                               <SidebarMenuItem>
@@ -341,13 +336,12 @@ export function AppSidebar() {
                                     onClick={() => toggleFolderExpand(childFolder.id)}
                                     className="p-1 hover:bg-sidebar-accent rounded flex-shrink-0"
                                   >
-                                    <ChevronDown 
-                                      className={`w-4 h-4 transition-transform ${
-                                        isChildExpanded ? '' : '-rotate-90'
-                                      }`} 
+                                    <ChevronDown
+                                      className={`w-4 h-4 transition-transform ${isChildExpanded ? '' : '-rotate-90'
+                                        }`}
                                     />
                                   </button>
-                                  <SidebarMenuButton 
+                                  <SidebarMenuButton
                                     onClick={() => router.push(`/dashboard?folder=${childFolder.id}`)}
                                     className="flex-1 text-muted-foreground text-sm"
                                   >

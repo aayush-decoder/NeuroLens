@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
-import { User, Globe, Target, BookOpen, Save, ArrowLeft, Sparkles } from 'lucide-react';
+import { User, Globe, Target, Save, ArrowLeft, Sparkles } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useProfile } from '@/hooks/useProfile';
 import { Button } from '@/components/ui/button';
@@ -20,18 +20,16 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     display_name: '',
-    bio: '',
     preferred_language: 'en',
-    reading_goal_minutes: 30,
+    daily_goal_minutes: 30,
   });
 
   React.useEffect(() => {
     if (profile) {
       setForm({
         display_name: profile.display_name || '',
-        bio: profile.bio || '',
         preferred_language: profile.preferred_language || 'en',
-        reading_goal_minutes: profile.reading_goal_minutes || 30,
+        daily_goal_minutes: profile.daily_goal_minutes ?? profile.reading_goal_minutes ?? 30,
       });
     }
   }, [profile]);
@@ -118,20 +116,6 @@ export default function ProfilePage() {
               />
             </div>
 
-            <div>
-              <Label htmlFor="bio" className="text-foreground flex items-center gap-2">
-                <BookOpen className="w-4 h-4 text-muted-foreground" /> Bio
-              </Label>
-              <Textarea
-                id="bio"
-                value={form.bio}
-                onChange={e => setForm(f => ({ ...f, bio: e.target.value }))}
-                className="mt-1.5"
-                placeholder="Tell us about yourself..."
-                rows={3}
-              />
-            </div>
-
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="lang" className="text-foreground flex items-center gap-2">
@@ -150,17 +134,18 @@ export default function ProfilePage() {
                   <option value="pt">Portuguese</option>
                   <option value="zh">Chinese</option>
                   <option value="ja">Japanese</option>
+                  <option value="hi">Hindi</option>
                 </select>
               </div>
               <div>
                 <Label htmlFor="goal" className="text-foreground flex items-center gap-2">
-                  <Target className="w-4 h-4 text-muted-foreground" /> Daily Goal (min)
+                  <Target className="w-4 h-4 text-muted-foreground" /> Daily Goal
                 </Label>
                 <Input
                   id="goal"
                   type="number"
-                  value={form.reading_goal_minutes}
-                  onChange={e => setForm(f => ({ ...f, reading_goal_minutes: parseInt(e.target.value) || 0 }))}
+                  value={form.daily_goal_minutes}
+                  onChange={e => setForm(f => ({ ...f, daily_goal_minutes: parseInt(e.target.value) || 0 }))}
                   className="mt-1.5"
                   min={5}
                   max={480}

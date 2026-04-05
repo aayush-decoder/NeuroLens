@@ -15,6 +15,7 @@ model User {
   readingLevel  String?
   preferredLang String?
   fatigueScore  Float?           @default(0)
+  dailyGoalMinutes Int           @default(30)
   createdAt     DateTime         @default(now())
   sessions      ReadingSession[]
   files         UserFile[]
