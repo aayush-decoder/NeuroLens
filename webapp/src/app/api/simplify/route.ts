@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { scanWordmap } from "./wordmap";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
@@ -12,13 +13,14 @@ export interface SimplifyResult {
 }
 
 export async function POST(req: NextRequest) {
+  // Use req.text() first so malformed JSON gives us a clean 400, not a 500
+  const rawBody = await req.text();
+  let text = "";
+
   try {
-    // Use req.text() first so malformed JSON gives us a clean 400, not a 500
-    const rawBody = await req.text();
-    let text: string;
     try {
       const parsed = JSON.parse(rawBody);
-      text = parsed?.text;
+      text = parsed?.text || "";
     } catch (parseErr) {
       console.error("[simplify] Bad JSON body:", parseErr, "| raw:", rawBody.slice(0, 200));
       return NextResponse.json({ error: "Invalid JSON body", words: [] }, { status: 400 });
@@ -68,13 +70,13 @@ ${safeText}`;
     try {
       parsed = JSON.parse(jsonStr);
     } catch {
-      console.error("[simplify] Failed to parse Gemini response:", raw);
-      return NextResponse.json({ words: [] });
+      console.warn("[simplify] Gemini parse failed, falling back to wordmap");
+      return NextResponse.json({ words: scanWordmap(text, "meaning"), source: "wordmap" });
     }
 
     // Validate shape
     if (!Array.isArray(parsed.words)) {
-      return NextResponse.json({ words: [] });
+      return NextResponse.json({ words: scanWordmap(text, "meaning"), source: "wordmap" });
     }
 
     const words = parsed.words
@@ -88,12 +90,10 @@ ${safeText}`;
       )
       .map((w) => ({ original: w.original.trim(), meaning: w.meaning.trim() }));
 
-    return NextResponse.json({ words });
+    return NextResponse.json({ words, source: "ai" });
   } catch (error: unknown) {
-    console.error("[simplify] Error:", error);
-    return NextResponse.json(
-      { error: "Simplification failed", words: [] },
-      { status: 500 }
-    );
+    console.error("[simplify] AI failed, falling back to wordmap:", error);
+    const fallback = scanWordmap(text, "meaning");
+    return NextResponse.json({ words: fallback, source: "wordmap" });
   }
 }

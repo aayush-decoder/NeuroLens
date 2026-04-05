@@ -1,23 +1,51 @@
-const WEBAPP_BASE = "https://aleta-stairless-nguyet.ngrok-free.dev";   // webapp (Next.js) — auth
-const BACKEND_BASE = "https://aleta-stairless-nguyet.ngrok-free.dev"; // extension-backend — adapt/session/etc.
+const WEBAPP_BASE = "https://aleta-stairless-nguyet.ngrok-free.dev";
 
-const authSection = document.getElementById("auth-section");
-const mainSection = document.getElementById("main-section");
-const statusEl = document.getElementById("status");
-const userInfoEl = document.getElementById("user-info");
-const langSelect = document.getElementById("language");
+const authSection    = document.getElementById("auth-section");
+const mainSection    = document.getElementById("main-section");
+const userInfoEl     = document.getElementById("user-info");
+const langSelect     = document.getElementById("language");
+const fontSelect     = document.getElementById("font-family");
+const darkToggle     = document.getElementById("dark-mode-toggle");
 
-function setStatus(msg, isError = false) {
-    statusEl.textContent = msg;
-    statusEl.className = isError ? "error" : "";
+// Status element — one per section; get the visible one
+function getStatusEl() {
+    return (mainSection.style.display === "none")
+        ? document.querySelector("#auth-section #status")
+        : document.querySelector("#main-section #status");
 }
 
-// ── Boot: check if already logged in ─────────────────────────────────────────
+function setStatus(msg, type = "") {
+    const el = getStatusEl();
+    if (!el) return;
+    el.textContent = msg;
+    el.className = type; // "error" | "ok" | ""
+}
+
+// ── Dark mode helpers ──────────────────────────────────────────────────────────
+function applyPopupDark(isDark) {
+    document.body.classList.toggle("dark", isDark);
+}
+
+// ── Boot: check stored session ────────────────────────────────────────────────
 chrome.storage.local.get(["ar_token", "ar_user"], (data) => {
     if (data.ar_token && data.ar_user) {
         showMain(data.ar_user);
     } else {
         showAuth();
+    }
+});
+
+// Load visual prefs regardless of auth state
+chrome.storage.sync.get(["arDarkMode", "arFontFamily", "language"], (prefs) => {
+    if (prefs.arDarkMode) {
+        darkToggle.checked = true;
+        applyPopupDark(true);
+    }
+    if (prefs.arFontFamily) {
+        fontSelect.value = prefs.arFontFamily;
+    }
+    if (prefs.language) {
+        langSelect.value = prefs.language;
     }
 });
 
@@ -29,19 +57,36 @@ function showAuth() {
 function showMain(user) {
     authSection.style.display = "none";
     mainSection.style.display = "block";
-    userInfoEl.textContent = `Signed in as ${user.email}`;
-    chrome.storage.sync.get(["language"], (d) => {
-        if (d.language) langSelect.value = d.language;
-    });
+    userInfoEl.textContent = "Signed in as " + (user.email || "");
 }
 
-// ── Auth: sign in or auto-register via webapp Postgres ───────────────────────
+// ── Dark mode toggle ──────────────────────────────────────────────────────────
+darkToggle.addEventListener("change", () => {
+    const isDark = darkToggle.checked;
+    applyPopupDark(isDark);
+    chrome.storage.sync.set({ arDarkMode: isDark });
+    console.log("[AR:popup] Dark mode →", isDark);
+});
+
+// ── Font family change ────────────────────────────────────────────────────────
+fontSelect.addEventListener("change", () => {
+    const font = fontSelect.value;
+    chrome.storage.sync.set({ arFontFamily: font });
+    console.log("[AR:popup] Font family →", font);
+});
+
+// ── Language change ───────────────────────────────────────────────────────────
+langSelect.addEventListener("change", () => {
+    chrome.storage.sync.set({ language: langSelect.value });
+});
+
+// ── Auth: sign in or auto-register ───────────────────────────────────────────
 document.getElementById("btn-auth").addEventListener("click", async () => {
-    const email = document.getElementById("auth-email").value.trim();
+    const email    = document.getElementById("auth-email").value.trim();
     const password = document.getElementById("auth-password").value;
 
     if (!email || !password) {
-        setStatus("Email and password required.", true);
+        setStatus("Email and password required.", "error");
         return;
     }
 
@@ -50,14 +95,12 @@ document.getElementById("btn-auth").addEventListener("click", async () => {
     setStatus("Signing in…");
 
     try {
-        // 1. Try login against webapp Postgres
         let res = await fetch(`${WEBAPP_BASE}/api/auth/extension/login`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ email, password })
         });
 
-        // 2. User not found → auto-register
         if (res.status === 401) {
             const err = await res.json();
             const msg = (err.error || "").toLowerCase();
@@ -77,15 +120,15 @@ document.getElementById("btn-auth").addEventListener("click", async () => {
             throw new Error(err.error || `HTTP ${res.status}`);
         }
 
-        const data = await res.json();
-        const user = { email: data.email, username: data.username, user_id: data.user_id };
+        const data  = await res.json();
+        const user  = { email: data.email, username: data.username, user_id: data.user_id };
 
         await chrome.storage.local.set({ ar_token: data.access_token, ar_user: user });
-        setStatus("");
+        setStatus("", "ok");
         showMain(user);
 
     } catch (e) {
-        setStatus(e.message, true);
+        setStatus(e.message, "error");
     } finally {
         btn.disabled = false;
     }
@@ -100,8 +143,12 @@ document.getElementById("btn-logout").addEventListener("click", async () => {
 
 // ── Activate reader ───────────────────────────────────────────────────────────
 document.getElementById("activate").addEventListener("click", async () => {
-    const language = langSelect.value;
-    await chrome.storage.sync.set({ language });
+    const language   = langSelect.value;
+    const fontFamily = fontSelect.value;
+    const darkMode   = darkToggle.checked;
+
+    // Persist all prefs before injecting
+    await chrome.storage.sync.set({ language, arFontFamily: fontFamily, arDarkMode: darkMode });
 
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
@@ -122,9 +169,9 @@ document.getElementById("activate").addEventListener("click", async () => {
             ]
         });
 
-        setStatus("Reader activated!");
+        setStatus("Reader activated!", "ok");
         setTimeout(() => window.close(), 700);
     } catch (err) {
-        setStatus("Error: " + err.message, true);
+        setStatus("Error: " + err.message, "error");
     }
 });

@@ -20,7 +20,13 @@
         "default_popup": "popup.html",
         "default_icon": "icons/icon128.png"
     },
+    "web_accessible_resources": [
+        {
+            "resources": ["content/revision.md"],
+            "matches": ["<all_urls>"]
+        }
+    ],
     "content_security_policy": {
         "extension_pages": "script-src 'self'; object-src 'self'"
     }
-}
+}

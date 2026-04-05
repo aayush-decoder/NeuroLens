@@ -14,28 +14,62 @@ const secret = new TextEncoder().encode(
 
 export async function POST(req: Request) {
   try {
-    const { email, password } = await req.json();
-
-    if (!email || !password) {
-      return NextResponse.json({ error: "Email and password required" }, { status: 400 });
+    let body: unknown;
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
     }
 
+    if (!body || typeof body !== "object") {
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    }
+
+    const { email, password } = body as Record<string, unknown>;
+
+    if (!email || typeof email !== "string") {
+      return NextResponse.json({ error: "Email is required" }, { status: 400 });
+    }
+    if (!password || typeof password !== "string") {
+      return NextResponse.json({ error: "Password is required" }, { status: 400 });
+    }
+
+    console.log("[extension/login] Email:", email);
     const user = await prisma.user.findUnique({ where: { email } });
 
     if (!user) {
+      console.log("[extension/login] User not found");
       return NextResponse.json({ error: "User not found" }, { status: 401 });
     }
 
+    if (!user.password) {
+      console.log("[extension/login] No password stored");
+      return NextResponse.json(
+        { error: "This account uses a different sign-in method" },
+        { status: 401 }
+      );
+    }
+
+    console.log("[extension/login] Comparing passwords...");
     const valid = await bcrypt.compare(password, user.password);
     if (!valid) {
       return NextResponse.json({ error: "Invalid password" }, { status: 401 });
     }
 
-    const token = await new SignJWT({ sub: user.id, email: user.email, username: user.username })
+    console.log("[extension/login] Passwords match. Creating payload...");
+    const jwtPayload = {
+      sub: user.id ?? "",
+      email: user.email ?? "",
+      username: user.username ?? "",
+    };
+
+    console.log("[extension/login] Signing JWT with payload...");
+    const token = await new SignJWT(jwtPayload)
       .setProtectedHeader({ alg: "HS256" })
       .setExpirationTime("7d")
       .sign(secret);
 
+    console.log("[extension/login] JWT Created. Returning response...");
     return NextResponse.json({
       access_token: token,
       token_type: "bearer",
@@ -43,8 +77,9 @@ export async function POST(req: Request) {
       username: user.username,
       email: user.email,
     });
-  } catch (err) {
-    console.error("[extension/login]", err);
+  } catch (err: any) {
+    console.error("[extension/login] Unexpected error! Message:", err?.message);
+    console.error("[extension/login] Stack trace:", err?.stack);
     return NextResponse.json({ error: "Something went wrong" }, { status: 500 });
   }
 }

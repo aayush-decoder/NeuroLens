@@ -1,0 +1,130 @@
+// Shared hard-word map used as a fallback when the AI endpoint is unavailable.
+// Keys are lowercase for case-insensitive lookup.
+export const hardWords = new Map<string, { meaning: string; hindi: string }>([
+    ["vietnamese", { meaning: "from Vietnam", hindi: "वियतनामी" }],
+    ["honorary", { meaning: "given as an honor", hindi: "मानदंडित" }],
+    ["archipelago", { meaning: "group of islands", hindi: "द्वीपसमूह" }],
+    ["sovereignty", { meaning: "supreme authority", hindi: "सार्वभौमिकता" }],
+    ["asserts", { meaning: "claims strongly", hindi: "दावा करना" }],
+    ["covertly", { meaning: "secretly", hindi: "गुप्त रूप से" }],
+    ["paramilitary", { meaning: "semi-military", hindi: "अर्धसैनिक" }],
+    ["ethnographic", { meaning: "study of people", hindi: "जनजातीय अध्ययन" }],
+    ["interrogation", { meaning: "formal questioning", hindi: "पूछताछ" }],
+    ["misery", { meaning: "extreme suffering", hindi: "दुःख" }],
+    ["intimidated", { meaning: "frightened", hindi: "डरा हुआ" }],
+    ["expeditions", { meaning: "journeys", hindi: "अभियान" }],
+    ["reclamation", { meaning: "land recovery", hindi: "पुनः दावा" }],
+    ["infrastructure", { meaning: "basic facilities", hindi: "बुनियादी ढांचा" }],
+    ["disappeared", { meaning: "vanished", hindi: "गायब" }],
+    ["transnational", { meaning: "crossing countries", hindi: "अंतरराष्ट्रीय" }],
+    ["assertiveness", { meaning: "forceful behavior", hindi: "आत्मविश्वासपूर्ण" }],
+    ["commemorations", { meaning: "ceremonies to honor", hindi: "स्मरणोत्सव" }],
+    ["harassment", { meaning: "persistent trouble", hindi: "उत्पीड़न" }],
+    ["oblivion", { meaning: "state of being forgotten", hindi: "अविस्मरण" }],
+    ["detained", { meaning: "kept in custody", hindi: "हिरासत में लिया" }],
+    ["bureaucracy", { meaning: "official procedures", hindi: "राजस्व प्रशासन" }],
+    ["intervention", { meaning: "getting involved", hindi: "हस्तक्षेप" }],
+    ["diplomatic", { meaning: "relating to diplomacy", hindi: "राजनयिक" }],
+    ["unilateral", { meaning: "one-sided", hindi: "एकतरफा" }],
+    ["paramount", { meaning: "most important", hindi: "परम" }],
+    ["resilience", { meaning: "ability to recover", hindi: "लचीलापन" }],
+    ["evacuated", { meaning: "removed safely", hindi: "खाली किया" }],
+    ["adversity", { meaning: "difficulties", hindi: "कठिनाई" }],
+    ["extrajudicial", { meaning: "outside courts", hindi: "अधिकारित न्याय के बाहर" }],
+    ["espionage", { meaning: "spying", hindi: "जासूसी" }],
+    ["guerilla", { meaning: "irregular fighter", hindi: "गुरिल्ला" }],
+    ["cooperation", { meaning: "working together", hindi: "सहयोग" }],
+    ["evade", { meaning: "avoid", hindi: "बचना" }],
+    ["provisions", { meaning: "supplies", hindi: "प्रावधान" }],
+    ["rhetoric", { meaning: "persuasive language", hindi: "प्रशंसात्मक भाषा" }],
+    ["repercussions", { meaning: "consequences", hindi: "परिणाम" }],
+    ["collateral", { meaning: "security for loan", hindi: "बंधक संपत्ति" }],
+    ["negotiation", { meaning: "discussion to agree", hindi: "समझौता वार्ता" }],
+    ["coercion", { meaning: "forcing", hindi: "दबाव" }],
+    ["authorities", { meaning: "officials", hindi: "प्राधिकरण" }],
+    ["advocates", { meaning: "supporters", hindi: "समर्थक" }],
+    ["militia", { meaning: "armed civilians", hindi: "स्वयंसेवक सेना" }],
+    ["strategic", { meaning: "important for planning", hindi: "रणनीतिक" }],
+    ["jurisdiction", { meaning: "legal authority", hindi: "क्षेत्राधिकार" }],
+    ["escalated", { meaning: "intensified", hindi: "बढ़ा" }],
+    ["subsequent", { meaning: "following", hindi: "पश्चात" }],
+    ["intermittent", { meaning: "occasional", hindi: "अविरल" }],
+    ["disputed", { meaning: "argued over", hindi: "विवादित" }],
+    ["compromised", { meaning: "weakened", hindi: "समझौता किया" }],
+    ["repercussion", { meaning: "consequence", hindi: "परिणाम" }],
+    ["sanctions", { meaning: "penalties", hindi: "प्रतिबंध" }],
+    ["annexed", { meaning: "added territory", hindi: "संपत्ति जोड़ना" }],
+    ["vulnerability", { meaning: "weakness", hindi: "असुरक्षा" }],
+    ["impunity", { meaning: "without punishment", hindi: "निर्दोषता" }],
+    ["insurgency", { meaning: "rebellion", hindi: "विद्रोह" }],
+    ["displacement", { meaning: "forced moving", hindi: "स्थलांतरण" }],
+    ["coastal", { meaning: "near the shore", hindi: "तटीय" }],
+    ["maritime", { meaning: "related to sea", hindi: "समुद्री" }],
+    ["reconciliation", { meaning: "restoring peace", hindi: "मेल-मिलाप" }],
+    ["hostilities", { meaning: "fighting", hindi: "शत्रुता" }],
+    ["combat", { meaning: "fight", hindi: "संग्राम" }],
+    ["fatalities", { meaning: "deaths", hindi: "मृत्यु" }],
+    ["intelligence", { meaning: "information gathering", hindi: "खुफिया" }],
+    ["navigation", { meaning: "sailing skill", hindi: "नौवहन" }],
+    ["infringement", { meaning: "violation", hindi: "उल्लंघन" }],
+    ["deterrent", { meaning: "prevention measure", hindi: "निरोधक" }],
+    ["mediation", { meaning: "conflict resolving", hindi: "मध्यस्थता" }],
+    ["bilateral", { meaning: "two-sided", hindi: "द्विपक्षीय" }],
+    ["armistice", { meaning: "truce", hindi: "युद्धविराम" }],
+    ["casualties", { meaning: "injured/killed", hindi: "हानि" }],
+    ["fortification", { meaning: "defense structure", hindi: "किला" }],
+    ["occupation", { meaning: "control of land", hindi: "अधिकार" }],
+    ["expropriation", { meaning: "taking property", hindi: "अधिग्रहण" }],
+    ["subjugation", { meaning: "domination", hindi: "दमन" }],
+    ["insubordination", { meaning: "refusal to obey", hindi: "अवज्ञा" }],
+    ["abduction", { meaning: "kidnapping", hindi: "अपहरण" }],
+    ["expatriates", { meaning: "living abroad", hindi: "प्रवासियों" }],
+    ["penalized", { meaning: "punished", hindi: "दंडित" }],
+    ["precarious", { meaning: "unsafe", hindi: "असुरक्षित" }],
+    ["jurisdictional", { meaning: "legal control", hindi: "क्षेत्राधिकार संबंधी" }],
+    ["oceanic", { meaning: "related to ocean", hindi: "महासागरीय" }],
+    ["naval", { meaning: "related to navy", hindi: "नौसैनिक" }],
+    ["escalation", { meaning: "increase in conflict", hindi: "संकट बढ़ना" }],
+    ["entitlements", { meaning: "rights", hindi: "अधिकार" }],
+    ["arbitration", { meaning: "official judgment", hindi: "निर्णय" }],
+    ["militarization", { meaning: "arming of area", hindi: "सैनिकीकरण" }],
+    ["paramountcy", { meaning: "supreme power", hindi: "प्रधानता" }],
+    ["intrusion", { meaning: "trespass", hindi: "अतिक्रमण" }],
+    ["interdiction", { meaning: "blocking", hindi: "रोक" }],
+    ["retribution", { meaning: "punishment", hindi: "प्रतिशोध" }],
+    ["hostile", { meaning: "unfriendly", hindi: "शत्रुतापूर्ण" }],
+    ["retaliation", { meaning: "counterattack", hindi: "प्रतिशोध" }],
+    ["vexation", { meaning: "annoyance", hindi: "क्लेश" }],
+    ["subversion", { meaning: "undermining authority", hindi: "उपद्रव" }],
+    ["diplomacy", { meaning: "international relations", hindi: "कूटनीति" }],
+    ["obstruction", { meaning: "blocking", hindi: "अवरोध" }],
+    ["deterrence", { meaning: "prevention", hindi: "निरोध" }],
+]);
+
+/**
+ * Scan `text` against the wordmap and return matched entries.
+ * @param text - paragraph text
+ * @param mode - "meaning" for simplify, "hindi" for ESL
+ */
+export function scanWordmap(
+    text: string,
+    mode: "meaning" | "hindi"
+): Array<{ original: string; meaning: string }> {
+    const words: Array<{ original: string; meaning: string }> = [];
+    const lower = text.toLowerCase();
+
+    for (const [key, entry] of hardWords) {
+        // Simple word-boundary check using regex
+        const re = new RegExp(`\\b${key}\\b`, "i");
+        if (re.test(lower)) {
+            // Find original casing in the text
+            const match = text.match(new RegExp(`\\b${key}\\b`, "i"));
+            words.push({
+                original: match ? match[0] : key,
+                meaning: mode === "hindi" ? entry.hindi : entry.meaning,
+            });
+        }
+    }
+
+    return words;
+}

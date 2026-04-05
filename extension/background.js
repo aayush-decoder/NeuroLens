@@ -58,6 +58,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         return true;
     }
 
+    if (msg.type === "ESL_PARAGRAPH") {
+        handleEsl(msg).then(sendResponse).catch(err => {
+            console.error("[AR:background] ESL_PARAGRAPH error:", err);
+            sendResponse({ words: [] });
+        });
+        return true;
+    }
+
     if (msg.type === "TELEMETRY") {
         // fire-and-forget — don't await
         handleTelemetry(msg).catch(err =>
@@ -65,6 +73,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         );
         sendResponse({ ok: true });
         return false;
+    }
+
+    if (msg.type === "SAVE_TO_BUCKET") {
+        handleSaveToBucket(msg).then(sendResponse).catch(err => {
+            console.error("[AR:background] SAVE_TO_BUCKET error:", err);
+            sendResponse({ error: err.message });
+        });
+        return true;
     }
 });
 
@@ -225,4 +241,64 @@ async function handleSimplify(msg) {
         data
     );
     return data;
+}
+
+// ── /api/esl (webapp) ─────────────────────────────────────────────────────────
+async function handleEsl(msg) {
+    const rawText = (msg.text || "").trim();
+    const safeText = rawText
+        .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, " ")
+        .replace(/\\(?!["\\/bfnrtu])/g, "\\\\")
+        .slice(0, 4000);
+
+    if (!safeText) return { words: [] };
+
+    console.log("[AR:background] /api/esl → para length:", safeText.length);
+    const t0 = Date.now();
+
+    const res = await fetch(`${BASE_WEBAPP}/api/esl`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: safeText })
+    });
+
+    if (!res.ok) {
+        const errText = await res.text();
+        console.error("[AR:background] /api/esl HTTP error:", res.status, errText);
+        return { words: [] };
+    }
+
+    const data = await res.json();
+    console.log(
+        `[AR:background] /api/esl ← in ${Date.now() - t0}ms`,
+        "words found:", data.words?.length,
+        "source:", data.source,
+        data
+    );
+    return data;
+}
+
+// ── Save to Bucket ────────────────────────────────────────────────────────────
+async function handleSaveToBucket(msg) {
+    const payload = {
+        url: msg.url,
+        title: msg.title,
+        text: msg.text,
+        revisionMarkdown: msg.revisionMarkdown,
+        conceptSvg: msg.conceptSvg
+    };
+
+    console.log("[AR:background] Saving to bucket via /api/extension/save...");
+    const res = await fetch(`${BASE_WEBAPP}/api/extension/save`, {
+        method: "POST",
+        headers: await authHeaders(),
+        body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) {
+        const txt = await res.text();
+        throw new Error(`Bucket save failed (${res.status}): ${txt}`);
+    }
+
+    return await res.json();
 }

@@ -4,71 +4,230 @@
 <head>
   <meta charset="utf-8">
   <style>
-    body {
-      font-family: sans-serif;
-      width: 260px;
-      padding: 16px;
+    * {
+      box-sizing: border-box;
       margin: 0;
+      padding: 0;
     }
 
-    h3 {
-      margin: 0 0 14px;
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      width: 280px;
+      background: #ffffff;
+      color: #1a1a1a;
+      transition: background 0.3s ease, color 0.3s ease;
+    }
+
+    body.dark {
+      background: #1a1a1a;
+      color: #e0e0e0;
+    }
+
+    /* ── Header ── */
+    .popup-header {
+      background: linear-gradient(135deg, #4CAF50 0%, #2e7d32 100%);
+      padding: 16px 16px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .popup-header h3 {
       font-size: 15px;
-      font-weight: 600;
+      font-weight: 700;
+      color: #fff;
+      letter-spacing: 0.3px;
+    }
+
+    .popup-header .subtitle {
+      font-size: 10px;
+      color: rgba(255, 255, 255, 0.75);
+      margin-top: 2px;
+    }
+
+    /* ── Sections ── */
+    .popup-body {
+      padding: 14px 16px;
     }
 
     label {
       display: block;
-      font-size: 12px;
-      color: #666;
-      margin-bottom: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 5px;
+    }
+
+    body.dark label {
+      color: #aaa;
     }
 
     input[type="email"],
     input[type="password"] {
       width: 100%;
-      padding: 6px 8px;
+      padding: 8px 10px;
       font-size: 13px;
-      border: 1px solid #ddd;
-      border-radius: 6px;
-      box-sizing: border-box;
+      border: 1.5px solid #e0e0e0;
+      border-radius: 8px;
       margin-bottom: 10px;
+      background: #fafafa;
+      color: #1a1a1a;
+      transition: border-color 0.2s;
+    }
+
+    body.dark input[type="email"],
+    body.dark input[type="password"] {
+      background: #2a2a2a;
+      border-color: #444;
+      color: #e0e0e0;
+    }
+
+    input:focus {
+      outline: none;
+      border-color: #4CAF50;
     }
 
     select {
       width: 100%;
-      padding: 6px 8px;
+      padding: 7px 10px;
       font-size: 13px;
-      border: 1px solid #ddd;
-      border-radius: 6px;
-      box-sizing: border-box;
+      border: 1.5px solid #e0e0e0;
+      border-radius: 8px;
+      margin-bottom: 12px;
+      background: #fafafa;
+      color: #1a1a1a;
+      cursor: pointer;
+      transition: border-color 0.2s;
+    }
+
+    body.dark select {
+      background: #2a2a2a;
+      border-color: #444;
+      color: #e0e0e0;
+    }
+
+    select:focus {
+      outline: none;
+      border-color: #4CAF50;
+    }
+
+    /* ── Toggle switch ── */
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
       margin-bottom: 12px;
     }
 
-    button {
-      width: 100%;
-      padding: 8px;
-      background: #4CAF50;
-      color: #fff;
-      border: none;
-      border-radius: 6px;
-      font-size: 14px;
-      cursor: pointer;
-      margin-bottom: 6px;
+    .toggle-label {
+      font-size: 13px;
+      color: #333;
     }
 
-    button:hover { background: #43A047; }
-    button:disabled { background: #aaa; cursor: default; }
+    body.dark .toggle-label {
+      color: #ccc;
+    }
 
-    #btn-logout {
+    .toggle {
+      position: relative;
+      width: 40px;
+      height: 22px;
+      flex-shrink: 0;
+    }
+
+    .toggle input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .toggle-slider {
+      position: absolute;
+      inset: 0;
+      background: #ccc;
+      border-radius: 22px;
+      cursor: pointer;
+      transition: background 0.25s;
+    }
+
+    .toggle-slider::before {
+      content: "";
+      position: absolute;
+      height: 16px;
+      width: 16px;
+      left: 3px;
+      top: 3px;
+      background: #fff;
+      border-radius: 50%;
+      transition: transform 0.25s;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+    }
+
+    .toggle input:checked+.toggle-slider {
+      background: #4CAF50;
+    }
+
+    .toggle input:checked+.toggle-slider::before {
+      transform: translateX(18px);
+    }
+
+    /* ── Buttons ── */
+    .btn {
+      width: 100%;
+      padding: 9px;
+      border: none;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-bottom: 8px;
+      transition: background 0.15s, transform 0.1s;
+    }
+
+    .btn:active {
+      transform: scale(0.98);
+    }
+
+    .btn-primary {
+      background: #4CAF50;
+      color: #fff;
+    }
+
+    .btn-primary:hover {
+      background: #43A047;
+    }
+
+    .btn-primary:disabled {
+      background: #a5d6a7;
+      cursor: default;
+    }
+
+    .btn-activate {
+      background: linear-gradient(135deg, #4CAF50, #2e7d32);
+      color: #fff;
+      box-shadow: 0 2px 8px rgba(76, 175, 80, 0.35);
+    }
+
+    .btn-activate:hover {
+      background: linear-gradient(135deg, #43A047, #256427);
+    }
+
+    .btn-logout {
       background: transparent;
-      color: #999;
+      color: #aaa;
       font-size: 12px;
+      font-weight: 400;
       padding: 4px;
       margin-bottom: 0;
     }
-    #btn-logout:hover { color: #e53935; background: transparent; }
 
+    .btn-logout:hover {
+      color: #e53935;
+    }
+
+    /* ── Status ── */
     #status {
       font-size: 11px;
       color: #888;
@@ -77,7 +236,13 @@
       min-height: 16px;
     }
 
-    #status.error { color: #e53935; }
+    #status.error {
+      color: #e53935;
+    }
+
+    #status.ok {
+      color: #4CAF50;
+    }
 
     .divider {
       border: none;
@@ -85,16 +250,39 @@
       margin: 12px 0;
     }
 
-    .user-info {
-      font-size: 11px;
-      color: #555;
-      text-align: center;
-      margin-bottom: 10px;
+    body.dark .divider {
+      border-color: #333;
     }
 
-    /* sections */
+    .user-info {
+      font-size: 11px;
+      color: #888;
+      text-align: center;
+      margin-bottom: 12px;
+      padding: 6px 10px;
+      background: #f5f5f5;
+      border-radius: 6px;
+    }
+
+    body.dark .user-info {
+      background: #252525;
+      color: #aaa;
+    }
+
+    .section-title {
+      font-size: 11px;
+      font-weight: 700;
+      color: #4CAF50;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      margin-bottom: 8px;
+    }
+
     #auth-section {}
-    #main-section { display: none; }
+
+    #main-section {
+      display: none;
+    }
   </style>
 </head>
 
@@ -102,34 +290,74 @@
 
   <!-- Auth section -->
   <div id="auth-section">
-    <h3>Adaptive Reader</h3>
-    <label>Email</label>
-    <input type="email" id="auth-email" placeholder="you@example.com" />
-    <label>Password</label>
-    <input type="password" id="auth-password" placeholder="••••••••" />
-    <button id="btn-auth">Sign in / Register</button>
-    <div id="status"></div>
+    <div class="popup-header">
+      <div>
+        <h3>Adaptive Reader</h3>
+        <div class="subtitle">Sign in to continue</div>
+      </div>
+    </div>
+    <div class="popup-body">
+      <label>Email</label>
+      <input type="email" id="auth-email" placeholder="you@example.com" />
+      <label>Password</label>
+      <input type="password" id="auth-password" placeholder="••••••••" />
+      <button class="btn btn-primary" id="btn-auth">Sign in / Register</button>
+      <div id="status"></div>
+    </div>
   </div>
 
   <!-- Main section (shown after auth) -->
   <div id="main-section">
-    <h3>Adaptive Reader</h3>
-    <div class="user-info" id="user-info"></div>
+    <div class="popup-header">
+      <div>
+        <h3>Adaptive Reader</h3>
+        <div class="subtitle">Reading intelligence active</div>
+      </div>
+    </div>
+    <div class="popup-body">
 
-    <label>Second language (ESL support)</label>
-    <select id="language">
-      <option value="">None</option>
-      <option value="spanish">Spanish</option>
-      <option value="french">French</option>
-      <option value="hindi">Hindi</option>
-      <option value="portuguese">Portuguese</option>
-    </select>
+      <div class="user-info" id="user-info"></div>
 
-    <button id="activate">Activate Reader</button>
-    <div id="status"></div>
+      <!-- Reading preferences -->
+      <div class="section-title">Reading Options</div>
 
-    <hr class="divider">
-    <button id="btn-logout">Sign out</button>
+      <label>ESL Language Support</label>
+      <select id="language">
+        <option value="">None</option>
+        <option value="spanish">Spanish</option>
+        <option value="french">French</option>
+        <option value="hindi">Hindi</option>
+        <option value="portuguese">Portuguese</option>
+      </select>
+
+      <label>Font Family</label>
+      <select id="font-family">
+        <option value="">Default (Georgia)</option>
+        <option value="'Inter', sans-serif">Inter</option>
+        <option value="'Merriweather', serif">Merriweather</option>
+        <option value="'Roboto', sans-serif">Roboto</option>
+        <option value="'Open Sans', sans-serif">Open Sans</option>
+        <option value="'Lato', sans-serif">Lato</option>
+        <option value="'Nunito', sans-serif">Nunito</option>
+        <option value="'Source Serif 4', serif">Source Serif 4</option>
+        <option value="monospace">Monospace</option>
+      </select>
+
+      <!-- Dark Mode toggle -->
+      <div class="toggle-row">
+        <span class="toggle-label">Dark Mode</span>
+        <label class="toggle">
+          <input type="checkbox" id="dark-mode-toggle" />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+
+      <button class="btn btn-activate" id="activate">▶ Activate Reader</button>
+      <div id="status"></div>
+
+      <hr class="divider">
+      <button class="btn btn-logout" id="btn-logout">Sign out</button>
+    </div>
   </div>
 
   <script src="popup.js"></script>
