@@ -4,18 +4,49 @@ import { NextAuthConfig } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { prisma } from "@/lib/prisma";
+import { jwtVerify } from "jose";
 
 const { auth } = NextAuth(authOptions as NextAuthConfig);
+const bearerSecret = new TextEncoder().encode(
+  process.env.NEXTAUTH_SECRET ?? "change-me"
+);
+
+async function resolveUserId(request: Request): Promise<string | null> {
+  const session = await auth();
+
+  if (session && session.user && (session.user as { id?: string }).id) {
+    return (session.user as { id: string }).id;
+  }
+
+  const authorization = request.headers.get("authorization") || "";
+  const match = authorization.match(/^Bearer\s+(.+)$/i);
+
+  if (!match) {
+    return null;
+  }
+
+  try {
+    const { payload } = await jwtVerify(match[1], bearerSecret);
+    const userId = typeof payload.sub === "string" ? payload.sub : null;
+
+    if (!userId) {
+      return null;
+    }
+
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    return user ? user.id : null;
+  } catch {
+    return null;
+  }
+}
 
 export async function POST(request: Request) {
   try {
-    const session = await auth();
+    const userId = await resolveUserId(request);
 
-    if (!session || !session.user || !(session.user as { id?: string }).id) {
+    if (!userId) {
       return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
     }
-
-    const userId = (session.user as { id: string }).id;
 
     // Parse form data
     const formData = await request.formData();

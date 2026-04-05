@@ -15,7 +15,8 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { countWords, loadDocuments, saveDocuments, stripFormatting } from '@/lib/adaptive-store';
-import { adaptText, getBackendBaseUrl } from '@/lib/backend-api';
+import { adaptText, getBackendBaseUrl, uploadUserFile } from '@/lib/backend-api';
+import { loadAuthSession, type AuthSession } from '@/lib/auth-store';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 export default function ModalScreen() {
@@ -28,6 +29,11 @@ export default function ModalScreen() {
   const [savedState, setSavedState] = useState('');
   const [importing, setImporting] = useState(false);
   const [refining, setRefining] = useState(false);
+  const [authSession, setAuthSession] = useState<AuthSession | null>(null);
+
+  useEffect(() => {
+    void loadAuthSession().then(setAuthSession);
+  }, []);
 
   const cleaned = stripFormatting(rawText);
 
@@ -75,12 +81,34 @@ export default function ModalScreen() {
 
       setRawText(text);
 
+      if (authSession?.accessToken) {
+        try {
+          const uploadResult = await uploadUserFile({
+            uri: asset.uri,
+            name: asset.name || `${Date.now()}.txt`,
+            type: asset.mimeType || 'text/plain',
+            path: folder.trim() || 'General',
+            accessToken: authSession.accessToken,
+          });
+
+          if (uploadResult.success) {
+            setSavedState(`Imported ${asset.name || 'document'} and synced to backend.`);
+          } else {
+            setSavedState(`Imported ${asset.name || 'document'} locally, but backend sync was not confirmed.`);
+          }
+        } catch {
+          setSavedState(`Imported ${asset.name || 'document'} locally. Sign in again to sync to backend.`);
+        }
+      }
+
       if (!title.trim() || title === 'Untitled Document') {
         const fallbackTitle = asset.name?.replace(/\.[^.]+$/, '') || 'Imported Document';
         setTitle(fallbackTitle);
       }
 
-      setSavedState(`Imported ${asset.name || 'document'} from phone storage.`);
+      if (!authSession?.accessToken) {
+        setSavedState(`Imported ${asset.name || 'document'} from phone storage. Sign in to sync to backend.`);
+      }
     } catch {
       setSavedState('Unable to import this file. Choose a UTF-8 text file (.txt, .md, .json).');
     } finally {

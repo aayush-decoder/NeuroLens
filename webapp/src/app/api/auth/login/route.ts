@@ -1,6 +1,11 @@
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
+import { SignJWT } from "jose";
 import { NextResponse } from "next/server";
+
+const secret = new TextEncoder().encode(
+  process.env.NEXTAUTH_SECRET ?? "change-me"
+);
 
 export async function POST(req: Request) {
   try {
@@ -32,8 +37,19 @@ export async function POST(req: Request) {
       }
     }
 
+    const accessToken = await new SignJWT({
+      sub: user.id,
+      email: user.email,
+      username: user.username,
+    })
+      .setProtectedHeader({ alg: "HS256" })
+      .setExpirationTime("7d")
+      .sign(secret);
+
     return NextResponse.json({
       message: "Login successful",
+      access_token: accessToken,
+      token_type: "bearer",
       user: {
         id: user.id,
         username: user.username,

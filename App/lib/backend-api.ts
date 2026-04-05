@@ -117,18 +117,22 @@ export type MobileAuthUser = {
   id: string;
   username: string;
   email: string;
+  accessToken?: string;
 };
 
 export async function loginFromMobile(input: {
   email: string;
   password: string;
 }): Promise<MobileAuthUser> {
-  const response = await apiRequest<{ user: MobileAuthUser }>('/api/auth/login', {
+  const response = await apiRequest<{ user: MobileAuthUser; access_token?: string }>('/api/auth/login', {
     method: 'POST',
     body: input,
   });
 
-  return response.user;
+  return {
+    ...response.user,
+    accessToken: response.access_token,
+  };
 }
 
 export async function signupFromMobile(input: {
@@ -137,4 +141,35 @@ export async function signupFromMobile(input: {
   password: string;
 }): Promise<void> {
   await registerFromMobile(input);
+}
+
+export async function uploadUserFile(input: {
+  uri: string;
+  name: string;
+  type?: string;
+  path: string;
+  accessToken?: string;
+}): Promise<{ success: boolean; url?: string; message?: string }> {
+  const formData = new FormData();
+  formData.append('file', {
+    uri: input.uri,
+    name: input.name,
+    type: input.type || 'text/plain',
+  } as unknown as Blob);
+  formData.append('path', input.path);
+
+  const response = await fetch(`${API_BASE_URL}/api/upload`, {
+    method: 'POST',
+    headers: input.accessToken ? { Authorization: `Bearer ${input.accessToken}` } : undefined,
+    body: formData,
+  });
+
+  const text = await response.text();
+  const payload = text ? JSON.parse(text) : {};
+
+  if (!response.ok) {
+    throw new Error(payload.message || payload.error || `Upload failed (${response.status})`);
+  }
+
+  return payload;
 }
