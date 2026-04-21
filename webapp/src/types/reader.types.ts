@@ -63,4 +63,15 @@ export interface ReadingSessionState {
     strugglingParagraphs: number[];
   };
   fatigueLevel?: 'LOW' | 'MEDIUM' | 'HIGH' | 'EXTREME';
+  simplifiedPhrases?: Array<{
+    id: string;
+    paragraphIndex: number;
+    originalPhrase: string;
+    simplifiedPhrase: string;
+    explanation: string;
+    startOffset: number;
+    endOffset: number;
+    timestamp: number;
+  }>;
+  highlightedPhrases?: string[];
 }

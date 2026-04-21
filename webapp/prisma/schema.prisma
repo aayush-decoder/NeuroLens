@@ -8,77 +8,62 @@ datasource db {
 }
 
 model User {
-  id       String @id @default(cuid())
-  username String @unique
-  email    String @unique
-  password String
-
-  readingLevel  String?
-  preferredLang String?
-  fatigueScore  Float?  @default(0)
-
-  createdAt DateTime @default(now())
-
-  // Relations
-  sessions ReadingSession[]
-  files    UserFile[]
+  id               String           @id @default(cuid())
+  username         String           @unique
+  email            String           @unique
+  password         String
+  readingLevel     String?
+  preferredLang    String?
+  fatigueScore     Float?           @default(0)
+  createdAt        DateTime         @default(now())
+  dailyGoalMinutes Int              @default(30)
+  sessions         ReadingSession[]
+  files            UserFile[]
 }
 
 model Content {
-  id         String   @id @default(uuid())
+  id         String           @id @default(uuid())
   title      String
   body       String
   difficulty String
   language   String
-  createdAt  DateTime @default(now())
-
-  sessions ReadingSession[]
+  createdAt  DateTime         @default(now())
+  sessions   ReadingSession[]
 }
 
 model ReadingSession {
-  id        String @id @default(uuid())
-  userId    String
-  contentId String
-
-  startTime DateTime  @default(now())
-  endTime   DateTime?
-
-  scrollDepth    Float  @default(0)
-  avgScrollSpeed Float?
-
-  pauses     Json?
-  highlights Json?
-
-  status String @default("active")
-
+  id              String           @id @default(uuid())
+  userId          String
+  contentId       String
+  startTime       DateTime         @default(now())
+  endTime         DateTime?
+  scrollDepth     Float            @default(0)
+  avgScrollSpeed  Float?
+  pauses          Json?
+  highlights      Json?
+  status          String           @default("active")
+  content         Content          @relation(fields: [contentId], references: [id])
+  user            User             @relation(fields: [userId], references: [id])
   telemetryEvents TelemetryEvent[]
-
-  user    User    @relation(fields: [userId], references: [id])
-  content Content @relation(fields: [contentId], references: [id])
 }
 
 model TelemetryEvent {
-  id        String @id @default(uuid())
+  id        String         @id @default(uuid())
   sessionId String
-
-  type  String // scroll | pause | highlight
-  value Float?
-  meta  Json?
-
-  createdAt DateTime @default(now())
-
-  session ReadingSession @relation(fields: [sessionId], references: [id])
+  type      String
+  value     Float?
+  meta      Json?
+  createdAt DateTime       @default(now())
+  session   ReadingSession @relation(fields: [sessionId], references: [id])
 }
 
 model Adaptation {
-  id        String @id @default(uuid())
+  id        String   @id @default(uuid())
   sessionId String
-
   paragraph Int
-  type      String // synonym | definition | simplify
+  type      String
   original  String
   modified  String
-
   createdAt DateTime @default(now())
 }
 
@@ -88,6 +73,5 @@ model UserFile {
   url       String
   path      String
   createdAt DateTime @default(now())
-
-  user User @relation(fields: [userId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
 }

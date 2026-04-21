@@ -121,12 +121,22 @@ function scanWordmap(text) {
 }
 
 // ── Module-level state ────────────────────────────────────────────────────────
+// TODO: Make these thresholds configurable via settings panel
+// Dwell threshold (ms) before a paragraph is sent to /api/adapt for simplification
+const AR_ADAPT_DWELL_THRESHOLD_MS = 10000; // 10 seconds as required
+// Additional wait time (ms) after /api/adapt before calling /api/translate
+const AR_TRANSLATE_DELAY_MS = 10000; // 10 seconds after adapt completes
+
 window._arDwellMap        = window._arDwellMap        || {};
 window._arRescrollMap     = window._arRescrollMap     || {};
 window._arStruggledParagraphs = window._arStruggledParagraphs || [];
 window._arAdaptingSet     = window._arAdaptingSet     || new Set();
+window._arTranslatingSet  = window._arTranslatingSet  || new Set();
 window._arSessionId       = window._arSessionId       || crypto.randomUUID();
 window._arSessionStart    = window._arSessionStart    || Date.now();
+// Concept map state - build incrementally
+window._arConceptMapWords = window._arConceptMapWords || {};
+window._arConceptMapCategories = window._arConceptMapCategories || {};
 
 // ── Serial gloss queue ────────────────────────────────────────────────────────
 // Paragraphs that dwelled 10s+ are processed ONE AT A TIME via these queues.
@@ -328,8 +338,8 @@ function initTelemetry(container) {
         const dwell   = window._arDwellMap[idx]   || 0;
         const rescroll = window._arRescrollMap[idx] || 0;
 
-        // Adaptation (full AI rewrite) only after 20s or on rescroll
-        const adaptFlag = dwell > 20000 || rescroll >= 1;
+        // Adaptation: use global threshold constant
+        const adaptFlag = dwell > AR_ADAPT_DWELL_THRESHOLD_MS || rescroll >= 1;
 
         console.log(
             `[AR:telemetry] Struggle check para ${idx}:`,
@@ -349,6 +359,44 @@ function initTelemetry(container) {
     }
 }
 
+// ── Style inserted brackets in grey ───────────────────────────────────────────
+/**
+ * Compares original text with modified HTML and wraps inserted content
+ * (text in brackets like [definition] or (expansion)) in grey spans.
+ */
+function styleInsertedBrackets(originalText, modifiedHtml) {
+    // Extract plain text from HTML for comparison
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = modifiedHtml;
+    const modifiedText = tempDiv.textContent || tempDiv.innerText || '';
+    
+    // Find all bracket patterns: [text] or (text)
+    const bracketPattern = /(\[[^\]]+\]|\([^)]+\))/g;
+    
+    // Check if these brackets exist in original text
+    let styledHtml = modifiedHtml;
+    const matches = modifiedText.match(bracketPattern);
+    
+    if (matches) {
+        matches.forEach(function(bracket) {
+            // If bracket doesn't exist in original text, it was inserted
+            if (originalText.indexOf(bracket) === -1) {
+                // Escape special regex characters in bracket
+                const escapedBracket = bracket.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                // Wrap it in a grey span (outside of existing HTML tags)
+                const greySpan = '<span style="color: #888; opacity: 0.75;">' + bracket + '</span>';
+                // Replace in HTML, but be careful not to replace inside existing tags
+                styledHtml = styledHtml.replace(
+                    new RegExp('(?<=>|^)(' + escapedBracket + ')(?=<|$)', 'g'),
+                    greySpan
+                );
+            }
+        });
+    }
+    
+    return styledHtml;
+}
+
 // ── Adaptation call ───────────────────────────────────────────────────────────
 function triggerAdaptation(para, idx, dwellMs, rescrollCount) {
     const originalText = para.textContent.trim();
@@ -360,56 +408,216 @@ function triggerAdaptation(para, idx, dwellMs, rescrollCount) {
         `elapsed=${elapsedMin().toFixed(2)}min`
     );
 
-    chrome.storage.sync.get("language", (data) => {
-        const language = data.language || null;
-        console.log(`[AR:telemetry] Para ${idx}: language pref =`, language);
-
-        chrome.runtime.sendMessage(
-            {
-                type: "ADAPT_PARAGRAPH",
-                text: originalText,
-                paragraph_index: Number(idx),
-                url: location.href,
-                dwell_ms: dwellMs,
-                rescroll_count: rescrollCount,
-                session_elapsed_min: elapsedMin(),
-                language
-            },
-            (res) => {
-                if (chrome.runtime.lastError) {
-                    console.error(`[AR:telemetry] Para ${idx}: runtime error:`, chrome.runtime.lastError);
-                    para.style.opacity = "1";
-                    window._arAdaptingSet.delete(idx);
-                    return;
-                }
-
-                if (!res || res.error) {
-                    console.error(`[AR:telemetry] Para ${idx}: adapt error:`, res?.error);
-                    window._arAdaptingSet.delete(idx);
-                    return;
-                }
-
-                console.log(
-                    `[AR:telemetry] Para ${idx}: adaptation received.`,
-                    `cache_hit=${res.cache_hit},`,
-                    `replacements=${res.replacements?.length || 0}`
-                );
-
-                if (res.adapted_html) {
-                    injectAdaptedHTML(para, idx, res.adapted_html, res.replacements || [], originalText);
-
-                    sendTelemetry("adaptation_shown", {
-                        paragraph_index: Number(idx),
+    // Call /api/adapt to get simplified paragraph
+    chrome.runtime.sendMessage(
+        {
+            type: "ADAPT_PARAGRAPH",
+            text: originalText,
+            paragraph_index: Number(idx),
+            url: location.href,
+            dwell_ms: dwellMs,
+            rescroll_count: rescrollCount,
+            session_elapsed_min: elapsedMin(),
+            language: null
+        },
+        (res) => {
+            if (!chrome.runtime.lastError && res && res.modifiedText) {
+                console.log(`[AR:telemetry] Para ${idx}: adapt success, replacing paragraph`);
+                
+                // Style inserted brackets in grey by comparing original and modified text
+                const styledHtml = styleInsertedBrackets(originalText, res.modifiedText);
+                
+                // Replace entire paragraph with simplified version
+                para.innerHTML = styledHtml;
+                para.classList.add("ar-adapted");
+                para.style.opacity = "1";
+                
+                // Store for review sheet
+                if (!window._arStruggledParagraphs.find(p => p.index === idx)) {
+                    window._arStruggledParagraphs.push({
+                        index: Number(idx),
+                        text: originalText,
                         dwell_ms: dwellMs,
                         rescroll_count: rescrollCount
                     });
-                } else {
-                    console.warn(`[AR:telemetry] Para ${idx}: no adapted_html in response`);
-                    window._arAdaptingSet.delete(idx);
                 }
+                
+                sendTelemetry("adaptation_shown", {
+                    paragraph_index: Number(idx),
+                    dwell_ms: dwellMs,
+                    rescroll_count: rescrollCount
+                });
+                
+                window._arAdaptingSet.delete(idx);
+                
+                // Extract hard words from adapted paragraph and categorize them
+                extractAndCategorizeWords(para, idx);
+                
+                // Schedule translation after AR_TRANSLATE_DELAY_MS
+                console.log(`[AR:telemetry] Para ${idx}: scheduling translation in ${AR_TRANSLATE_DELAY_MS}ms`);
+                setTimeout(function() {
+                    triggerTranslation(para, idx, res.modifiedText);
+                }, AR_TRANSLATE_DELAY_MS);
+                
+                return;
+            }
+
+            // Fallback: wordmap gloss injection
+            console.warn(`[AR:telemetry] Para ${idx}: adapt failed, falling back to wordmap`);
+            const words = scanWordmap(originalText);
+            if (words.length > 0) {
+                injectGlosses(para, words, "simplify");
+            }
+            window._arAdaptingSet.delete(idx);
+        }
+    );
+}
+
+// ── Translation call ──────────────────────────────────────────────────────────
+function triggerTranslation(para, idx, adaptedText) {
+    // Check if already translating
+    if (window._arTranslatingSet.has(idx)) {
+        console.log(`[AR:telemetry] Para ${idx}: translation already in progress, skip`);
+        return;
+    }
+    
+    // Check if paragraph still exists and is adapted
+    if (!para || !para.classList.contains("ar-adapted")) {
+        console.log(`[AR:telemetry] Para ${idx}: paragraph no longer adapted, skip translation`);
+        return;
+    }
+    
+    window._arTranslatingSet.add(idx);
+    
+    console.log(
+        `[AR:telemetry] triggerTranslation() para ${idx}:`,
+        `text length=${adaptedText.length}`
+    );
+    
+    // Get user's preferred language from storage (default: hindi)
+    chrome.storage.sync.get("language", function(data) {
+        const language = data.language || "hindi";
+        
+        console.log(`[AR:telemetry] Para ${idx}: translating to ${language}`);
+        
+        // Call /api/translate to translate bracketed definitions
+        chrome.runtime.sendMessage(
+            {
+                type: "TRANSLATE_PARAGRAPH",
+                text: adaptedText,
+                language: language,
+                paragraph_index: Number(idx)
+            },
+            (res) => {
+                if (!chrome.runtime.lastError && res && res.translatedText) {
+                    console.log(
+                        `[AR:telemetry] Para ${idx}: translation success,`,
+                        `applied ${res.translationsApplied || 0} translations`
+                    );
+                    
+                    // Replace paragraph with translated version
+                    para.innerHTML = res.translatedText;
+                    para.classList.add("ar-translated");
+                    
+                    sendTelemetry("translation_shown", {
+                        paragraph_index: Number(idx),
+                        language: language,
+                        translations_applied: res.translationsApplied || 0
+                    });
+                } else {
+                    console.warn(`[AR:telemetry] Para ${idx}: translation failed, keeping adapted version`);
+                }
+                
+                window._arTranslatingSet.delete(idx);
             }
         );
     });
+}
+
+// ── Extract and categorize words from adapted paragraph ──────────────────────
+function extractAndCategorizeWords(para, idx) {
+    // Extract all hard words from this paragraph
+    // Look for words that have definitions in parentheses or brackets
+    const text = para.textContent || "";
+    const hardWords = [];
+    
+    // Pattern: word (definition) or word [definition]
+    // We want to extract the "word" part before the bracket/parenthesis
+    const pattern = /(\w+)\s*[\[\(]/g;
+    let match;
+    
+    while ((match = pattern.exec(text)) !== null) {
+        const word = match[1].toLowerCase();
+        if (word && word.length > 3 && !hardWords.includes(word)) {
+            hardWords.push(word);
+            // Track which paragraph this word came from
+            if (!window._arConceptMapWords[word]) {
+                window._arConceptMapWords[word] = [];
+            }
+            if (!window._arConceptMapWords[word].includes(idx)) {
+                window._arConceptMapWords[word].push(idx);
+            }
+        }
+    }
+    
+    // Also check for .ar-hard-word spans (from wordmap fallback)
+    para.querySelectorAll(".ar-hard-word").forEach(function(span) {
+        const word = (span.textContent || "").trim().toLowerCase();
+        if (word && word.length > 3 && !hardWords.includes(word)) {
+            hardWords.push(word);
+            if (!window._arConceptMapWords[word]) {
+                window._arConceptMapWords[word] = [];
+            }
+            if (!window._arConceptMapWords[word].includes(idx)) {
+                window._arConceptMapWords[word].push(idx);
+            }
+        }
+    });
+    
+    if (hardWords.length === 0) {
+        console.log(`[AR:telemetry] Para ${idx}: no hard words to categorize`);
+        return;
+    }
+    
+    console.log(`[AR:telemetry] Para ${idx}: categorizing ${hardWords.length} words:`, hardWords);
+    
+    // Call /api/categorize for these words
+    chrome.runtime.sendMessage(
+        {
+            type: "CATEGORIZE_WORDS",
+            words: hardWords,
+            paragraph_index: Number(idx)
+        },
+        function(response) {
+            if (response && response.categories) {
+                console.log(`[AR:telemetry] Para ${idx}: categorization success, source: ${response.source}`);
+                
+                // Merge categories into global concept map
+                Object.keys(response.categories).forEach(function(category) {
+                    if (!window._arConceptMapCategories[category]) {
+                        window._arConceptMapCategories[category] = [];
+                    }
+                    response.categories[category].forEach(function(word) {
+                        if (!window._arConceptMapCategories[category].includes(word)) {
+                            window._arConceptMapCategories[category].push(word);
+                        }
+                    });
+                });
+                
+                console.log("[AR:telemetry] Concept map updated. Total categories:", Object.keys(window._arConceptMapCategories).length);
+                
+                // Notify that concept map data is available
+                sendTelemetry("concept_map_updated", {
+                    paragraph_index: Number(idx),
+                    words_added: hardWords.length,
+                    total_words: Object.keys(window._arConceptMapWords).length,
+                    total_categories: Object.keys(window._arConceptMapCategories).length
+                });
+            } else {
+                console.warn(`[AR:telemetry] Para ${idx}: categorization failed, will use fallback at review`);
+            }
+        }
+    );
 }
 
 // ── DOM injection of adapted HTML ─────────────────────────────────────────────
@@ -590,3 +798,175 @@ function convertGlossesToHindi(para) {
 
     console.log("[AR:telemetry] convertGlossesToHindi: converted", hardWordSpans.length, "spans in para");
 }
+
+
+// ── Phrase Simplification Feature ──
+let simplifyTooltip = null;
+let simplifiedResultTooltip = null;
+
+console.log('[AR-SIMPLIFY] Phrase simplification feature loaded');
+
+// Listen for text selection
+document.addEventListener('mouseup', (e) => {
+  console.log('[AR-SIMPLIFY] mouseup event fired');
+  
+  setTimeout(() => {
+    const selection = window.getSelection();
+    const selectedText = selection?.toString().trim();
+    
+    console.log('[AR-SIMPLIFY] Selection:', {
+      hasSelection: !!selection,
+      text: selectedText,
+      length: selectedText?.length || 0
+    });
+    
+    if (!selectedText || selectedText.length === 0) {
+      hideSimplifyTooltip();
+      return;
+    }
+    
+    const wordCount = selectedText.split(/\s+/).length;
+    console.log('[AR-SIMPLIFY] Word count:', wordCount);
+    
+    // Only show for 3-100 words
+    if (wordCount < 3 || wordCount > 100) {
+      console.log('[AR-SIMPLIFY] Word count out of range (need 3-100)');
+      hideSimplifyTooltip();
+      return;
+    }
+    
+    const range = selection.getRangeAt(0);
+    const rect = range.getBoundingClientRect();
+    
+    console.log('[AR-SIMPLIFY] Showing tooltip at:', rect);
+    showSimplifyTooltip(selectedText, rect, getParagraphContext(selection));
+  }, 50);
+});
+
+function getParagraphContext(selection) {
+  let node = selection.anchorNode;
+  while (node && node.nodeName !== 'P') {
+    node = node.parentNode;
+  }
+  return node ? node.textContent : '';
+}
+
+function showSimplifyTooltip(text, rect, paragraphText) {
+  hideSimplifyTooltip();
+  
+  simplifyTooltip = document.createElement('div');
+  simplifyTooltip.className = 'ar-simplify-tooltip';
+  simplifyTooltip.innerHTML = `
+    <button class="ar-simplify-btn" data-action="simplify">
+      <span class="ar-icon">✨</span> Simplify
+    </button>
+  `;
+  
+  simplifyTooltip.style.left = `${rect.left + rect.width / 2 + window.scrollX}px`;
+  simplifyTooltip.style.top = `${rect.top + window.scrollY - 50}px`;
+  
+  simplifyTooltip.querySelector('[data-action="simplify"]').addEventListener('click', () => {
+    simplifyPhrase(text, paragraphText, rect);
+  });
+  
+  document.body.appendChild(simplifyTooltip);
+}
+
+function hideSimplifyTooltip() {
+  if (simplifyTooltip) {
+    simplifyTooltip.remove();
+    simplifyTooltip = null;
+  }
+}
+
+function hideSimplifiedResult() {
+  if (simplifiedResultTooltip) {
+    simplifiedResultTooltip.remove();
+    simplifiedResultTooltip = null;
+  }
+}
+
+async function simplifyPhrase(phrase, paragraph, rect) {
+  hideSimplifyTooltip();
+  
+  // Show loading
+  const loadingTooltip = document.createElement('div');
+  loadingTooltip.className = 'ar-simplify-result';
+  loadingTooltip.innerHTML = `
+    <div class="ar-loading">
+      <div class="ar-spinner"></div>
+      <span>Simplifying...</span>
+    </div>
+  `;
+  loadingTooltip.style.left = `${rect.left + rect.width / 2 + window.scrollX}px`;
+  loadingTooltip.style.top = `${rect.top + window.scrollY + 20}px`;
+  document.body.appendChild(loadingTooltip);
+  
+  try {
+    const response = await fetch('https://aleta-stairless-nguyet.ngrok-free.dev/api/simplify-phrase', {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json',
+        'ngrok-skip-browser-warning': 'true'
+      },
+      body: JSON.stringify({ paragraph, phrase })
+    });
+    
+    if (!response.ok) {
+      throw new Error('Simplification failed');
+    }
+    
+    const data = await response.json();
+    
+    loadingTooltip.remove();
+    showSimplifiedResult(data, rect);
+  } catch (error) {
+    console.error('[AR] Simplification error:', error);
+    loadingTooltip.innerHTML = `
+      <div class="ar-error">
+        <span>❌ Failed to simplify</span>
+      </div>
+    `;
+    setTimeout(() => loadingTooltip.remove(), 2000);
+  }
+}
+
+function showSimplifiedResult(data, rect) {
+  hideSimplifiedResult();
+  
+  simplifiedResultTooltip = document.createElement('div');
+  simplifiedResultTooltip.className = 'ar-simplify-result';
+  simplifiedResultTooltip.innerHTML = `
+    <div class="ar-result-header">
+      <strong>Simplified</strong>
+      <button class="ar-close-btn">✕</button>
+    </div>
+    <div class="ar-result-content">
+      <p class="ar-simplified-text">${data.simplifiedPhrase}</p>
+      <details class="ar-explanation">
+        <summary>Why?</summary>
+        <p>${data.explanation}</p>
+      </details>
+    </div>
+  `;
+  
+  simplifiedResultTooltip.style.left = `${rect.left + rect.width / 2 + window.scrollX}px`;
+  simplifiedResultTooltip.style.top = `${rect.top + window.scrollY + 20}px`;
+  
+  simplifiedResultTooltip.querySelector('.ar-close-btn').addEventListener('click', hideSimplifiedResult);
+  
+  document.body.appendChild(simplifiedResultTooltip);
+  
+  // Auto-hide after 10 seconds
+  setTimeout(hideSimplifiedResult, 10000);
+}
+
+// Close tooltips on click outside
+document.addEventListener('mousedown', (e) => {
+  if (simplifyTooltip && !simplifyTooltip.contains(e.target)) {
+    hideSimplifyTooltip();
+  }
+  if (simplifiedResultTooltip && !simplifiedResultTooltip.contains(e.target)) {
+    hideSimplifiedResult();
+  }
+});

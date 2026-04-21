@@ -5,7 +5,7 @@
  */
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import bcrypt from "bcryptjs";
+import bcrypt from "bcrypt";
 import { SignJWT } from "jose";
 
 const secret = new TextEncoder().encode(
@@ -77,9 +77,11 @@ export async function POST(req: Request) {
       username: user.username,
       email: user.email,
     });
-  } catch (err: any) {
-    console.error("[extension/login] Unexpected error! Message:", err?.message);
-    console.error("[extension/login] Stack trace:", err?.stack);
+  } catch (err: unknown) {
+    const error = err as Error;
+    console.error("[extension/login] Unexpected error! Message:", error?.message);
+    console.error("[extension/login] Stack trace:", error?.stack);
     return NextResponse.json({ error: "Something went wrong" }, { status: 500 });
   }
 }
+

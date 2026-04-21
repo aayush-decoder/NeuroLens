@@ -1,3 +1,5 @@
+'use client';
+
 import React, { useCallback, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Upload } from 'lucide-react';

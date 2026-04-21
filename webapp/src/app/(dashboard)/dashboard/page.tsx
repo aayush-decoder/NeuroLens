@@ -1,8 +1,23 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import Dashboard from '@/screens/Dashboard';
+import { useAuth } from '@/hooks/useAuth';
 
 export default function Page() {
+  const router = useRouter();
+  const { user, loading } = useAuth();
+
+  useEffect(() => {
+    if (!loading && !user) {
+      router.replace('/sign-in');
+    }
+  }, [loading, user, router]);
+
+  if (loading || !user) {
+    return null;
+  }
+
   return <Dashboard />;
 }

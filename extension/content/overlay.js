@@ -282,8 +282,7 @@ function endSession() {
     var bar = document.getElementById("ar-peek-bar");
     if (bar && bar.classList.contains("ar-visible")) resumeFromPeek();
 
-    var modal   = document.getElementById("ar-review-modal");
-    var content = document.getElementById("ar-review-content");
+    var modal    = document.getElementById("ar-review-modal");
     var struggled = window._arStruggledParagraphs || [];
 
     modal.classList.add("ar-visible");
@@ -299,80 +298,217 @@ function endSession() {
         session_elapsed_min: elapsedMin
     });
 
-    // Extract text and fire SAVE_TO_BUCKET in background asynchronously
-    setTimeout(async () => {
+    // ── Tab: Concept Map — build immediately ──────────────────────────────────
+    buildConceptGraph(document.getElementById("ar-concept-graph"));
+
+    // ── Load Smart Review + Revision Sheet via /api/review ───────────────────
+    var smartReviewEl  = document.getElementById("ar-review-content");
+    var revisionEl     = document.getElementById("ar-revision-content");
+
+    smartReviewEl.innerHTML = renderSmartReviewLoading();
+    revisionEl.innerHTML    = renderRevisionLoading();
+
+    chrome.storage.sync.get("language", function(d) {
+        var paragraphPayload = struggled.map(function(p) {
+            return {
+                index: p.index,
+                text: p.text,
+                dwell_ms: p.dwell_ms || (window._arDwellMap && window._arDwellMap[p.index]) || 0,
+                rescroll_count: p.rescroll_count || (window._arRescrollMap && window._arRescrollMap[p.index]) || 0
+            };
+        });
+
+        chrome.runtime.sendMessage({
+            type: "GENERATE_REVIEW",
+            session_id: window._arSessionId,
+            paragraphs: paragraphPayload,
+            language: d.language || null
+        }, function(res) {
+            var items = (res && res.items && res.items.length > 0)
+                ? res.items
+                : generateFallbackItems(struggled);
+
+            console.log("[AR:overlay] Review items received:", items.length);
+
+            smartReviewEl.innerHTML  = renderSmartReview(items, struggled);
+            revisionEl.innerHTML     = renderRevisionSheet(items, struggled);
+        });
+    });
+
+    // ── Fire bucket save in background ───────────────────────────────────────
+    setTimeout(function() {
         try {
             var fullText = Array.from(document.querySelectorAll("#ar-column p"))
-                .map(p => p.textContent)
+                .map(function(p) { return p.textContent; })
                 .join("\n\n");
-            
-            var conceptSvg = document.getElementById("ar-concept-graph")?.innerHTML || "";
-            
-            var mdResponse = await fetch(chrome.runtime.getURL("content/revision.md"));
-            var revisionMarkdown = await mdResponse.text();
+            var conceptSvg = document.getElementById("ar-concept-graph")
+                ? document.getElementById("ar-concept-graph").innerHTML
+                : "";
 
             chrome.runtime.sendMessage({
                 type: "SAVE_TO_BUCKET",
                 url: location.href,
                 title: document.title,
                 text: fullText,
-                conceptSvg,
-                revisionMarkdown
-            }, (res) => {
-                if (res?.error) console.error("[AR:overlay] SAVE_TO_BUCKET error:", res.error);
+                conceptSvg: conceptSvg,
+                revisionMarkdown: "" // will be ignored; bucket save is best-effort
+            }, function(res) {
+                if (res && res.error) console.error("[AR:overlay] SAVE_TO_BUCKET error:", res.error);
                 else console.log("[AR:overlay] SAVE_TO_BUCKET success:", res);
             });
         } catch (e) {
             console.error("[AR:overlay] Failed to trigger bucket save:", e);
         }
-    }, 1000);
+    }, 800);
+}
 
-    // ── Tab: Smart Review ──────────────────────────────────────────────────────
-    if (struggled.length === 0) {
-        content.innerHTML = "<p style='color:#777;font-size:14px;line-height:1.7'>" +
-            "<strong>Hardcoded Session Review (Fallback):</strong><br><br>" +
-            "<table>" +
-            "<tr><td>sovereignty</td><td>Supreme power or authority<br><em style='color:#1565c0;font-size:0.9em'>सार्वभौमिकता</em></td></tr>" +
-            "<tr><td>paramilitary</td><td>An unofficial force organized similarly to a military force<br><em style='color:#1565c0;font-size:0.9em'>अर्धसैनिक</em></td></tr>" +
-            "<tr><td>intimidation</td><td>The action of frightening or threatening someone<br><em style='color:#1565c0;font-size:0.9em'>धमकाना</em></td></tr>" +
-            "<tr><td>archipelago</td><td>A group of islands<br><em style='color:#1565c0;font-size:0.9em'>द्वीपसमूह</em></td></tr>" +
-            "</table>" +
-            "</p>";
-    } else {
-        content.innerHTML = "<p style='color:#aaa;font-size:13px'>Generating review...</p>";
-        chrome.storage.sync.get("language", function(d) {
-            chrome.runtime.sendMessage({
-                type: "GENERATE_REVIEW",
-                session_id: window._arSessionId,
-                paragraphs: struggled.map(function(p) { return {
-                    index: p.index,
-                    text: p.text,
-                    dwell_ms: p.dwell_ms || window._arDwellMap[p.index] || 0,
-                    rescroll_count: p.rescroll_count || window._arRescrollMap[p.index] || 0
-                }; }),
-                language: d.language || null
-            }, function(res) {
-                if (res && res.items && res.items.length) {
-                    var rows = res.items.map(function(item) {
-                        return "<tr><td>" + escHtml(item.term) + "</td><td>" +
-                            escHtml(item.definition) +
-                            (item.esl_equiv ? "<br><em style='color:#1565c0;font-size:0.9em'>" + escHtml(item.esl_equiv) + "</em>" : "") +
-                            "</td></tr>";
-                    }).join("");
-                    content.innerHTML = "<table>" + rows + "</table>";
-                } else {
-                    content.innerHTML = "<p style='color:#aaa;font-size:13px'>Could not generate review.</p>";
-                }
-            });
-        });
+// ── Smart Review HTML renderers ───────────────────────────────────────────────
+function renderSmartReviewLoading() {
+    return '<div style="text-align:center;padding:40px 0">' +
+        '<div style="display:inline-block;width:28px;height:28px;border:3px solid rgba(76,175,80,0.2);border-top-color:#4CAF50;border-radius:50%;animation:ar-spin 0.8s linear infinite;margin-bottom:10px"></div>' +
+        '<p style="color:#888;font-size:13px">Generating your Smart Review…</p>' +
+        '</div>';
+}
+
+function renderRevisionLoading() {
+    return '<div style="text-align:center;padding:40px 0">' +
+        '<div style="display:inline-block;width:28px;height:28px;border:3px solid rgba(76,175,80,0.2);border-top-color:#4CAF50;border-radius:50%;animation:ar-spin 0.8s linear infinite;margin-bottom:10px"></div>' +
+        '<p style="color:#888;font-size:13px">Building revision sheet…</p>' +
+        '</div>';
+}
+
+function renderSmartReview(items, struggled) {
+    if (!items.length && !struggled.length) {
+        return '<div style="text-align:center;padding:32px;color:#999;font-size:13px">' +
+            '<p>No struggled paragraphs detected.</p>' +
+            '<p style="margin-top:6px;font-size:12px">Keep reading to build your review!</p></div>';
     }
 
-    // ── Tab: Concept Map ───────────────────────────────────────────────────────
-    buildConceptGraph(document.getElementById("ar-concept-graph"));
+    var html = '';
 
-    // ── Tab: Revision Sheet ────────────────────────────────────────────────────
-    loadRevisionSheet(document.getElementById("ar-revision-content"));
+    // ── Key Insights banner ────────────────────────────────────────────────────
+    html += '<div style="background:#ecf9ec;border:1px solid #a5d6a7;border-radius:10px;padding:14px 16px;margin-bottom:16px">' +
+        '<p style="font-weight:700;color:#2e7d32;font-size:13px;margin-bottom:6px">✨ Key Insights</p>' +
+        '<ul style="list-style:none;font-size:12px;color:#388e3c;line-height:1.8">' +
+        '<li>• Found <strong>' + items.length + '</strong> challenging terms during your reading</li>' +
+        '<li>• <strong>' + struggled.length + '</strong> paragraph' + (struggled.length !== 1 ? 's' : '') + ' marked as difficult</li>' +
+        '<li>• Review these terms to improve comprehension</li>' +
+        '</ul></div>';
+
+    if (!items.length) {
+        html += '<div style="text-align:center;padding:20px;color:#aaa;font-size:13px">' +
+            '<p>No term definitions available.</p><p style="margin-top:4px;font-size:12px">Check the Revision Sheet tab.</p></div>';
+        return html;
+    }
+
+    // ── Challenging Terms list ─────────────────────────────────────────────────
+    html += '<p style="font-size:12px;font-weight:700;color:#555;margin-bottom:10px;text-transform:uppercase;letter-spacing:0.5px">Challenging Terms</p>';
+
+    items.forEach(function(item) {
+        html += '<div style="border:1px solid #e0e0e0;border-radius:10px;padding:12px 14px;margin-bottom:10px;transition:background 0.15s" ' +
+            'onmouseover="this.style.background=\'#fafafa\'" onmouseout="this.style.background=\'\'">' +
+            '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">' +
+            '<div style="flex:1">' +
+            '<p style="font-weight:700;color:#4CAF50;font-size:13px;margin-bottom:4px">' + escHtml(item.term) + '</p>' +
+            '<p style="font-size:13px;color:#333;line-height:1.6">' + escHtml(item.definition) + '</p>' +
+            (item.esl_equiv
+                ? '<p style="font-size:11px;color:#e91e63;margin-top:6px;font-style:italic">💡 Simpler: ' + escHtml(item.esl_equiv) + '</p>'
+                : '') +
+            '</div>' +
+            '<span style="font-size:11px;color:#aaa;white-space:nowrap;margin-top:2px">Para ' + (item.source_paragraph_index + 1) + '</span>' +
+            '</div></div>';
+    });
+
+    return html;
 }
+
+function renderRevisionSheet(items, struggled) {
+    var html = '';
+
+    // ── Study Tips ────────────────────────────────────────────────────────────
+    html += '<div style="background:#e8f4fd;border:1px solid #90caf9;border-radius:10px;padding:14px 16px;margin-bottom:16px">' +
+        '<p style="font-weight:700;color:#1565c0;font-size:13px;margin-bottom:6px">📚 Study Tips</p>' +
+        '<ul style="list-style:none;font-size:12px;color:#1976d2;line-height:2">' +
+        '<li>• Review these terms regularly to improve retention</li>' +
+        '<li>• Create flashcards for terms you struggle with</li>' +
+        '<li>• Try using these words in your own sentences</li>' +
+        '<li>• Focus on paragraphs marked as difficult</li>' +
+        '</ul></div>';
+
+    // ── Key Terms ─────────────────────────────────────────────────────────────
+    if (items.length > 0) {
+        html += '<p style="font-size:12px;font-weight:700;color:#555;margin-bottom:10px;text-transform:uppercase;letter-spacing:0.5px;border-bottom:1px solid #eee;padding-bottom:6px">Key Terms</p>';
+        items.forEach(function(item, i) {
+            html += '<div style="background:#f9f9f9;border:1px solid #e0e0e0;border-radius:10px;padding:12px 14px;margin-bottom:10px">' +
+                '<div style="display:flex;align-items:flex-start;gap:10px">' +
+                '<span style="font-weight:700;font-size:16px;color:#4CAF50;min-width:24px">' + (i + 1) + '.</span>' +
+                '<div style="flex:1">' +
+                '<p style="font-weight:700;color:#4CAF50;font-size:13px">' + escHtml(item.term) + '</p>' +
+                '<p style="font-size:13px;color:#333;margin-top:4px;line-height:1.6">' + escHtml(item.definition) + '</p>' +
+                (item.esl_equiv
+                    ? '<p style="font-size:11px;color:#e91e63;margin-top:6px;font-style:italic">💡 Simpler meaning: ' + escHtml(item.esl_equiv) + '</p>'
+                    : '') +
+                '<p style="font-size:11px;color:#aaa;margin-top:6px">Found in paragraph ' + (item.source_paragraph_index + 1) + '</p>' +
+                '</div></div></div>';
+        });
+    } else if (!struggled.length) {
+        html += '<p style="color:#aaa;font-size:13px;padding:20px 0;text-align:center">No review items yet.</p>';
+    }
+
+    // ── Challenging Paragraphs ─────────────────────────────────────────────────
+    if (struggled.length > 0) {
+        html += '<div style="background:#fff8e1;border:1px solid #ffe082;border-radius:10px;padding:14px 16px;margin-top:16px">' +
+            '<p style="font-weight:700;color:#e65100;font-size:13px;margin-bottom:10px">⚠️ Challenging Paragraphs</p>';
+        struggled.slice(0, 5).forEach(function(para) {
+            html += '<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:10px;font-size:12px;color:#bf360c">' +
+                '<span style="font-weight:700;white-space:nowrap">Para ' + (para.index + 1) + ':</span>' +
+                '<div style="flex:1">' +
+                '<p style="overflow:hidden;white-space:nowrap;text-overflow:ellipsis;max-width:340px">' + escHtml(para.text.substring(0, 65)) + '…</p>' +
+                '<p style="font-size:11px;color:#e64a19;margin-top:3px">⏱️ ' + (para.dwell_ms / 1000).toFixed(1) + 's dwell • ' + para.rescroll_count + ' rescrolls</p>' +
+                '</div></div>';
+        });
+        html += '</div>';
+    }
+
+    // ── Footer ────────────────────────────────────────────────────────────────
+    html += '<p style="text-align:center;font-size:11px;color:#bbb;margin-top:20px;padding-top:12px;border-top:1px solid #eee">' +
+        '💾 You can save this page (Ctrl+S) for offline study</p>';
+
+    return html;
+}
+
+// ── Local fallback: extract terms from struggled paragraphs ───────────────────
+var WORD_CATEGORIES_LOCAL = {
+    Political:    ["sovereignty","diplomatic","unilateral","rhetoric","sanctions","intervention","jurisdiction","governance","democracy","legislation"],
+    Military:     ["paramilitary","militia","combat","casualties","insurgency","espionage","retaliation","warfare","defense","strategic"],
+    Geographic:   ["archipelago","coastal","maritime","navigation","reclamation","annexed","disputed","transnational","occupation","territorial"],
+    Humanitarian: ["misery","harassment","adversity","vulnerability","resilience","displacement","detention","precarious","refugee","persecution"],
+    Legal:        ["extrajudicial","impunity","insubordination","penalized","infringement","deterrent","obstruction","coercion","statute","constitutional"],
+    Economic:     ["commerce","fiscal","monetary","investment","capital","revenue","expenditure","inflation","recession","subsidy","tariff"],
+    Scientific:   ["hypothesis","empirical","methodology","synthesis","theoretical","experimental","quantitative","qualitative","paradigm"],
+    Technological:["algorithm","automation","artificial","intelligence","computing","software","cybersecurity","infrastructure","digital"]
+};
+
+function generateFallbackItems(struggled) {
+    var items = [], seen = new Set();
+    for (var pi = 0; pi < struggled.length && items.length < 12; pi++) {
+        var para = struggled[pi];
+        var words = para.text.split(/[\s\-\.,\"';:!?()\[\]]+/).filter(function(w) { return w && w.length > 3; });
+        for (var wi = 0; wi < words.length && items.length < 12; wi++) {
+            var lower = words[wi].toLowerCase();
+            if (seen.has(lower) || lower.length > 30) continue;
+            seen.add(lower);
+            var category = "Other";
+            for (var cat in WORD_CATEGORIES_LOCAL) {
+                if (WORD_CATEGORIES_LOCAL[cat].indexOf(lower) !== -1) { category = cat; break; }
+            }
+            items.push({ term: words[wi], definition: "A " + category.toLowerCase() + " term found in your reading.", source_paragraph_index: para.index });
+        }
+    }
+    return items;
+}
+
+
 
 // ── Concept Graph ─────────────────────────────────────────────────────────────
 var WORD_CATEGORIES = {
@@ -394,7 +530,23 @@ var CATEGORY_COLORS = {
 function buildConceptGraph(container) {
     if (!container) return;
 
-    // Collect all words that were glossed during this session
+    // Check if we have incrementally built categories from reading session
+    const hasIncrementalData = window._arConceptMapCategories && 
+                               Object.keys(window._arConceptMapCategories).length > 0;
+
+    if (hasIncrementalData) {
+        console.log("[AR:overlay] Using incrementally built concept map from session");
+        console.log("[AR:overlay] Categories:", Object.keys(window._arConceptMapCategories));
+        console.log("[AR:overlay] Total words:", Object.keys(window._arConceptMapWords || {}).length);
+        
+        // Use the incrementally built categories
+        renderConceptGraph(container, window._arConceptMapCategories);
+        return;
+    }
+
+    // Fallback: collect words from DOM and categorize all at once
+    console.log("[AR:overlay] No incremental data, falling back to DOM collection");
+    
     var glossedWords = [];
     document.querySelectorAll("#ar-column .ar-hard-word").forEach(function(span) {
         var w = (span.textContent || "").trim().toLowerCase();
@@ -408,7 +560,33 @@ function buildConceptGraph(container) {
         return;
     }
 
-    // Assign each glossed word to its primary category
+    // Show loading state
+    container.innerHTML = "<p style='color:#aaa;text-align:center;padding:40px;font-size:13px'>Generating concept map...</p>";
+
+    // Try AI categorization first, fallback to hardcoded
+    chrome.runtime.sendMessage(
+        {
+            type: "CATEGORIZE_WORDS",
+            words: glossedWords
+        },
+        function(response) {
+            var wordsByCategory;
+            
+            if (response && response.categories) {
+                console.log("[AR:overlay] Using AI categorization, source:", response.source);
+                wordsByCategory = response.categories;
+            } else {
+                console.log("[AR:overlay] Using hardcoded categorization (fallback)");
+                wordsByCategory = categorizeWordsHardcoded(glossedWords);
+            }
+            
+            renderConceptGraph(container, wordsByCategory);
+        }
+    );
+}
+
+// ── Hardcoded categorization (fallback) ───────────────────────────────────────
+function categorizeWordsHardcoded(glossedWords) {
     var wordsByCategory = {};
     Object.keys(WORD_CATEGORIES).forEach(function(cat) { wordsByCategory[cat] = []; });
     wordsByCategory["Other"] = [];
@@ -429,6 +607,11 @@ function buildConceptGraph(container) {
         if (wordsByCategory[cat].length === 0) delete wordsByCategory[cat];
     });
 
+    return wordsByCategory;
+}
+
+// ── Render concept graph SVG ──────────────────────────────────────────────────
+function renderConceptGraph(container, wordsByCategory) {
     var W = container.offsetWidth || 560;
     var H = 420;
     var cx = W / 2, cy = H / 2;

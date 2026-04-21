@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
+
+export const dynamic = "force-dynamic";
 import { prisma } from "@/lib/prisma";
 import { jwtVerify } from "jose";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { S3_BUCKET } from "@/lib/s3";
 
 const secret = new TextEncoder().encode(
   process.env.NEXTAUTH_SECRET ?? "change-me"
@@ -31,15 +34,12 @@ export async function POST(req: Request) {
     const { url = "unknown-url", title = "Untitled", text = "", revisionMarkdown = "", conceptSvg = "" } = body;
 
     const region = process.env.AWS_REGION || "us-east-1";
-    const bucketName = process.env.AWS_S3_BUCKET_NAME;
+    const bucketName = S3_BUCKET;
     const accessKeyId = process.env.AWS_ACCESS_KEY_ID || process.env.AWS_ACCESSS_KEY;
     const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY || process.env.AWS_SECRET_KEY;
 
     if (!bucketName || !accessKeyId || !secretAccessKey) {
-      return NextResponse.json({
-        success: false,
-        message: "S3 is not configured.",
-      }, { status: 500 });
+      return NextResponse.json({ success: false, message: "S3 is not configured." }, { status: 500 });
     }
 
     const s3Client = new S3Client({
@@ -97,29 +97,21 @@ export async function POST(req: Request) {
     const targetUrlTxt = `https://${bucketName}.s3.${region}.amazonaws.com/${readTextKey}`;
     const targetUrlMd = `https://${bucketName}.s3.${region}.amazonaws.com/${revisionKey}`;
 
-    // 4. Save tracking info to Postgres DB
+    // 4. Save S3 keys — skip duplicates (unique constraint enforced at DB level)
     await prisma.userFile.createMany({
       data: [
-        {
-          userId,
-          url: targetUrlTxt,
-          path: domain
-        },
-        {
-          userId,
-          url: targetUrlMd,
-          path: domain
-        }
-      ]
+        { userId, url: readTextKey, path: domain },
+        { userId, url: revisionKey, path: domain },
+      ],
+      skipDuplicates: true,
     });
 
-    return NextResponse.json({
-      success: true,
-      files: [targetUrlTxt, targetUrlMd]
-    });
+    return NextResponse.json({ success: true, files: [targetUrlTxt, targetUrlMd] });
 
-  } catch (err: any) {
-    console.error("[extension/save] Error:", err);
-    return NextResponse.json({ error: err.message || "Failed to save data" }, { status: 500 });
+  } catch (err: unknown) {
+    const error = err as Error;
+    console.error("[extension/save] Error:", error);
+    return NextResponse.json({ error: error.message || "Failed to save data" }, { status: 500 });
   }
 }
+

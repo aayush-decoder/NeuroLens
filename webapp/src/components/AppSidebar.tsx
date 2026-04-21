@@ -1,10 +1,12 @@
+'use client';
+
 import React, { useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { motion, AnimatePresence } from 'framer-motion';
 import {
-  BookOpen, FolderOpen, Plus, Home, User, LogOut, Moon, Sun,
-  ChevronRight, Trash2, Settings, FilePlus, File, ChevronDown
+  FolderOpen, Plus, Home, User, LogOut, Moon, Sun,
+  Trash2, FilePlus, File, ChevronDown, Cloud, Loader2,
 } from 'lucide-react';
+
 import {
   Sidebar,
   SidebarContent,
@@ -12,9 +14,7 @@ import {
   SidebarGroupContent,
   SidebarGroupLabel,
   SidebarMenu,
-  SidebarMenuBadge,
   SidebarMenuButton,
-  SidebarMenuAction,
   SidebarMenuItem,
   SidebarFooter,
   SidebarHeader,
@@ -23,6 +23,7 @@ import {
 import { useFileStore } from '@/store/fileStore';
 import { useAuth } from '@/hooks/useAuth';
 import { useProfile } from '@/hooks/useProfile';
+import { useCloudFiles } from '@/hooks/useCloudFiles';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { processUploadedFile } from '@/lib/document-upload';
 
@@ -34,10 +35,12 @@ export function AppSidebar() {
   const { files, folders, theme, addFolder, addFile, removeFolder, setTheme } = useFileStore();
   const { user, signOut } = useAuth();
   const { profile } = useProfile();
+  const { directories: cloudDirs, loading: cloudLoading } = useCloudFiles();
   const [showNewFolder, setShowNewFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
   const [uploadFolderId, setUploadFolderId] = useState<string | null | undefined>(undefined);
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
+  const [expandedCloudDirs, setExpandedCloudDirs] = useState<Set<string>>(new Set());
   const folderUploadInputRef = useRef<HTMLInputElement>(null);
 
   const toggleFolderExpand = (folderId: string) => {
@@ -48,11 +51,6 @@ export function AppSidebar() {
       newExpanded.add(folderId);
     }
     setExpandedFolders(newExpanded);
-  };
-
-  const handleShowAllFiles = () => {
-    router.push('/dashboard');
-    window.dispatchEvent(new Event('adaptive-reader:show-all-files'));
   };
 
   const handleSignOut = async () => {
@@ -73,6 +71,11 @@ export function AppSidebar() {
   };
 
   const isActive = (path: string) => pathname === path;
+
+  // Open a cloud file in read mode via the stable /read/cloud/[dbId] route
+  const openCloudFile = (fileId: string) => {
+    router.push(`/read/cloud/${fileId}`);
+  };
 
   const handleFolderAddFiles = (folderId: string | null) => {
     setUploadFolderId(folderId);
@@ -99,17 +102,13 @@ export function AppSidebar() {
     <Sidebar collapsible="icon">
       <SidebarHeader className="p-4">
         <div className="flex items-center gap-3">
-          <motion.div
-            animate={{ rotate: [0, 3, -3, 0] }}
-            transition={{ duration: 3, repeat: Infinity, repeatDelay: 5 }}
-            className="w-10 h-10 rounded-xl gradient-violet flex items-center justify-center flex-shrink-0"
-          >
-            <BookOpen className="w-5 h-5 text-primary-foreground" />
-          </motion.div>
+          <div className="w-10 h-10 rounded-xl overflow-hidden shadow-lg shadow-teal-500/20 flex-shrink-0">
+            <img src="/logo.png" alt="NeuroLens Logo" className="w-full h-full object-cover" />
+          </div>
           {!collapsed && (
             <div>
-              <h1 className="text-base font-bold text-sidebar-foreground">AppName</h1>
-              <p className="text-[10px] text-muted-foreground">Adaptive Reader</p>
+              <h1 className="text-base font-bold text-sidebar-foreground">NeuroLens</h1>
+              <p className="text-[10px] text-muted-foreground">Focus Deeper. Learn Faster.</p>
             </div>
           )}
         </div>
@@ -328,6 +327,69 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+
+        {/* Cloud Storage */}
+        <SidebarGroup>
+          <SidebarGroupLabel className="flex items-center gap-1.5">
+            <Cloud className="w-3.5 h-3.5" />
+            {!collapsed && <span>Cloud Storage</span>}
+            {cloudLoading && !collapsed && <Loader2 className="w-3 h-3 animate-spin ml-auto text-muted-foreground" />}
+          </SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {cloudDirs.map(dir => {
+                const isExpanded = expandedCloudDirs.has(dir.name);
+                return (
+                  <div key={dir.name}>
+                    <SidebarMenuItem>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => {
+                            const next = new Set(expandedCloudDirs);
+                            if (isExpanded) { next.delete(dir.name); } else { next.add(dir.name); }
+                            setExpandedCloudDirs(next);
+                          }}
+                          className="p-1 hover:bg-sidebar-accent rounded flex-shrink-0"
+                        >
+                          <ChevronDown className={`w-4 h-4 transition-transform ${isExpanded ? '' : '-rotate-90'}`} />
+                        </button>
+                        <SidebarMenuButton className="flex-1 text-muted-foreground">
+                          <FolderOpen className="w-4 h-4" />
+                          {!collapsed && <span className="truncate">{dir.name}</span>}
+                          {!collapsed && (
+                            <span className="ml-auto text-[10px] text-muted-foreground bg-muted rounded-full px-1.5 py-0.5">
+                              {dir.files.length}
+                            </span>
+                          )}
+                        </SidebarMenuButton>
+                      </div>
+                    </SidebarMenuItem>
+
+                    {isExpanded && !collapsed && (
+                      <SidebarMenu className="pl-6 border-l border-sidebar-border ml-3">
+                        {dir.files.map(file => (
+                          <SidebarMenuItem key={file.id}>
+                            <SidebarMenuButton
+                              onClick={() => openCloudFile(file.id)}
+                              className="text-muted-foreground hover:text-foreground text-sm"
+                            >
+                              <File className="w-4 h-4" />
+                              <span className="truncate text-xs">{file.name}</span>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                        ))}
+                      </SidebarMenu>
+                    )}
+                  </div>
+                );
+              })}
+              {!cloudLoading && cloudDirs.length === 0 && !collapsed && (
+                <p className="text-[11px] text-muted-foreground px-3 py-2">No cloud files yet</p>
+              )}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
       </SidebarContent>
 
       <SidebarFooter className="p-3">

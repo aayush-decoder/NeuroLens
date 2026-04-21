@@ -1,5 +1,5 @@
-const BASE = "https://enfinity-hackathon-backend.onrender.com";
-const BASE_WEBAPP = "https://aleta-stairless-nguyet.ngrok-free.dev"; // Next.js webapp
+const WEBAPP_BASE = "https://aleta-stairless-nguyet.ngrok-free.dev"; // Next.js webapp
+
 
 // ── Auth token ────────────────────────────────────────────────────────────────
 async function getToken() {
@@ -21,6 +21,22 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     if (msg.type === "ADAPT_PARAGRAPH") {
         handleAdapt(msg).then(sendResponse).catch(err => {
             console.error("[AR:background] ADAPT_PARAGRAPH error:", err);
+            sendResponse({ error: err.message });
+        });
+        return true;
+    }
+
+    if (msg.type === "TRANSLATE_PARAGRAPH") {
+        handleTranslate(msg).then(sendResponse).catch(err => {
+            console.error("[AR:background] TRANSLATE_PARAGRAPH error:", err);
+            sendResponse({ error: err.message });
+        });
+        return true;
+    }
+
+    if (msg.type === "CATEGORIZE_WORDS") {
+        handleCategorize(msg).then(sendResponse).catch(err => {
+            console.error("[AR:background] CATEGORIZE_WORDS error:", err);
             sendResponse({ error: err.message });
         });
         return true;
@@ -50,8 +66,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         return true;
     }
 
-    if (msg.type === "SIMPLIFY_PARAGRAPH") {
-        handleSimplify(msg).then(sendResponse).catch(err => {
+    if (msg.type === "SIMPLIFY_PARAGRAPH") {        handleSimplify(msg).then(sendResponse).catch(err => {
             console.error("[AR:background] SIMPLIFY_PARAGRAPH error:", err);
             sendResponse({ words: [] });
         });
@@ -87,21 +102,16 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 // ── /api/adapt ────────────────────────────────────────────────────────────────
 async function handleAdapt(msg) {
     const payload = {
-        paragraph: msg.text,
-        paragraph_index: msg.paragraph_index,
-        url: msg.url,
-        dwell_ms: msg.dwell_ms,
-        rescroll_count: msg.rescroll_count,
-        session_elapsed_min: msg.session_elapsed_min,
-        language: msg.language || null
+        text: msg.text,
+        strugglingParagraphs: [msg.paragraph_index ?? 0]
     };
 
     console.log("[AR:background] /api/adapt → sending payload:", payload);
     const t0 = Date.now();
 
-    const res = await fetch(`${BASE}/api/adapt`, {
+    const res = await fetch(`${WEBAPP_BASE}/api/adapt`, {
         method: "POST",
-        headers: await authHeaders(),
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
     });
 
@@ -114,96 +124,133 @@ async function handleAdapt(msg) {
     const data = await res.json();
     console.log(
         `[AR:background] /api/adapt ← response in ${Date.now() - t0}ms`,
-        "cache_hit:", data.cache_hit,
-        "replacements:", data.replacements?.length,
         data
+    );
+    return data;
+}
+
+// ── /api/translate ────────────────────────────────────────────────────────────
+async function handleTranslate(msg) {
+    const payload = {
+        text: msg.text,
+        language: msg.language || "hindi"
+    };
+
+    console.log("[AR:background] /api/translate → sending payload:", payload);
+    const t0 = Date.now();
+
+    const res = await fetch(`${WEBAPP_BASE}/api/translate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) {
+        const errText = await res.text();
+        console.error("[AR:background] /api/translate HTTP error:", res.status, errText);
+        throw new Error(`translate HTTP ${res.status}`);
+    }
+
+    const data = await res.json();
+    console.log(
+        `[AR:background] /api/translate ← response in ${Date.now() - t0}ms`,
+        `language: ${data.language}, translations: ${data.translationsApplied}`
+    );
+    return data;
+}
+
+// ── /api/categorize ───────────────────────────────────────────────────────────
+async function handleCategorize(msg) {
+    const payload = {
+        words: msg.words || []
+    };
+
+    console.log("[AR:background] /api/categorize → sending", payload.words.length, "words");
+    const t0 = Date.now();
+
+    const res = await fetch(`${WEBAPP_BASE}/api/categorize`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) {
+        const errText = await res.text();
+        console.error("[AR:background] /api/categorize HTTP error:", res.status, errText);
+        throw new Error(`categorize HTTP ${res.status}`);
+    }
+
+    const data = await res.json();
+    console.log(
+        `[AR:background] /api/categorize ← response in ${Date.now() - t0}ms`,
+        `source: ${data.source}, processed: ${data.wordsProcessed}`
     );
     return data;
 }
 
 // ── /api/session/save ─────────────────────────────────────────────────────────
 async function handleSessionSave(msg) {
-    const payload = {
-        session_id: msg.session_id,
-        url: msg.url,
-        scroll_pct: msg.scroll_pct,
-        adapted_indices: msg.adapted_indices,
-        struggled_indices: msg.struggled_indices,
-        dwell_map: msg.dwell_map,
-        rescroll_map: msg.rescroll_map,
-        session_elapsed_min: msg.session_elapsed_min,
-        language: msg.language || null
-    };
-
-    console.log("[AR:background] /api/session/save → payload:", payload);
-
-    const res = await fetch(`${BASE}/api/session/save`, {
-        method: "POST",
-        headers: await authHeaders(),
-        body: JSON.stringify(payload)
-    });
-
-    const data = await res.json();
-    console.log("[AR:background] /api/session/save ← response:", data);
-    return data;
+    console.log("[AR:background] /api/session/save → skipped (no webapp endpoint)");
+    return { saved: true };
 }
 
 // ── /api/session/restore ──────────────────────────────────────────────────────
 async function handleSessionRestore(msg) {
-    console.log("[AR:background] /api/session/restore → url:", msg.url);
-
-    const res = await fetch(`${BASE}/api/session/restore`, {
-        method: "POST",
-        headers: await authHeaders(),
-        body: JSON.stringify({ url: msg.url })
-    });
-
-    const data = await res.json();
-    console.log("[AR:background] /api/session/restore ← response:", data);
-    return data;
+    console.log("[AR:background] /api/session/restore → skipped (no webapp endpoint)");
+    return { found: false };
 }
 
 // ── /api/review ───────────────────────────────────────────────────────────────
 async function handleReview(msg) {
     const payload = {
-        session_id: msg.session_id,
-        paragraphs: msg.paragraphs,
-        language: msg.language || null
+        session_id: msg.session_id || null,
+        paragraphs: msg.paragraphs || [],
+        language: msg.language || null,
     };
 
-    console.log("[AR:background] /api/review → payload:", payload);
+    console.log("[AR:background] /api/review → sending", payload.paragraphs.length, "paragraphs");
     const t0 = Date.now();
 
-    const res = await fetch(`${BASE}/api/review`, {
-        method: "POST",
-        headers: await authHeaders(),
-        body: JSON.stringify(payload)
-    });
+    // Try the extension-backend first, fall back to webapp API
+    const BACKEND_BASE = "https://enfinity-hackathon-backend.onrender.com";
+    const endpoints = [
+        `${BACKEND_BASE}/api/review`,
+        `${WEBAPP_BASE}/api/review`,
+    ];
 
-    const data = await res.json();
-    console.log(`[AR:background] /api/review ← in ${Date.now() - t0}ms`, data);
-    return data;
+    for (const url of endpoints) {
+        try {
+            const headers = { "Content-Type": "application/json" };
+            const token = await getToken();
+            if (token) headers["Authorization"] = `Bearer ${token}`;
+
+            const res = await fetch(url, {
+                method: "POST",
+                headers,
+                body: JSON.stringify(payload),
+            });
+
+            if (!res.ok) {
+                console.warn(`[AR:background] /api/review ${url} → HTTP ${res.status}`);
+                continue;
+            }
+
+            const data = await res.json();
+            console.log(`[AR:background] /api/review ← ${Date.now() - t0}ms from ${url}`, "items:", data.items?.length);
+            return data;
+        } catch (err) {
+            console.warn(`[AR:background] /api/review ${url} failed:`, err.message);
+        }
+    }
+
+    console.warn("[AR:background] /api/review all endpoints failed — returning empty");
+    return { items: [] };
 }
 
 // ── /api/telemetry ────────────────────────────────────────────────────────────
 async function handleTelemetry(msg) {
-    const payload = {
-        session_id: msg.session_id,
-        url: msg.url,
-        event: msg.event,
-        paragraph_index: msg.paragraph_index ?? null,
-        dwell_ms: msg.dwell_ms ?? null,
-        rescroll_count: msg.rescroll_count ?? null,
-        session_elapsed_min: msg.session_elapsed_min ?? null
-    };
-
-    console.log("[AR:background] /api/telemetry → event:", payload.event, payload);
-
-    await fetch(`${BASE}/api/telemetry`, {
-        method: "POST",
-        headers: await authHeaders(),
-        body: JSON.stringify(payload)
-    });
+    console.log("[AR:background] /api/telemetry → event:", msg.event, "(logged locally only)");
+    // No webapp endpoint - just log locally
 }
 
 // ── /api/simplify (webapp) ────────────────────────────────────────────────────
@@ -220,7 +267,7 @@ async function handleSimplify(msg) {
     console.log("[AR:background] /api/simplify → para length:", safeText.length);
     const t0 = Date.now();
 
-    const res = await fetch(`${BASE_WEBAPP}/api/simplify`, {
+    const res = await fetch(`${WEBAPP_BASE}/api/simplify`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: safeText })
@@ -256,7 +303,7 @@ async function handleEsl(msg) {
     console.log("[AR:background] /api/esl → para length:", safeText.length);
     const t0 = Date.now();
 
-    const res = await fetch(`${BASE_WEBAPP}/api/esl`, {
+    const res = await fetch(`${WEBAPP_BASE}/api/esl`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: safeText })
@@ -289,7 +336,7 @@ async function handleSaveToBucket(msg) {
     };
 
     console.log("[AR:background] Saving to bucket via /api/extension/save...");
-    const res = await fetch(`${BASE_WEBAPP}/api/extension/save`, {
+    const res = await fetch(`${WEBAPP_BASE}/api/extension/save`, {
         method: "POST",
         headers: await authHeaders(),
         body: JSON.stringify(payload)

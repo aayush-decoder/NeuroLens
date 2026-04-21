@@ -1,12 +1,20 @@
-// Framework-free telemetry engine
+// src/engines/telemetryEngine.ts
 import { ParagraphTelemetry, StruggledTerm } from '@/types/reader.types';
 
-const FRICTION_DWELL_THRESHOLD = 8000; // ms - long pause suggests difficulty
-const FRICTION_HESITATION_THRESHOLD = 3;
-const SCROLL_VELOCITY_SLOW = 0.5; // px/ms
+// Constants for behavioral heuristics
+const AVG_WPM = 230; 
+const MS_PER_WORD = (60 / AVG_WPM) * 1000; // ~260ms per word
+const FRICTION_HESITATION_WEIGHT = 0.15; // Hovering over complex words
+const FRICTION_SELECTION_WEIGHT = 0.3;   // Actively highlighting text
+
+export interface ExtendedParagraphTelemetry extends ParagraphTelemetry {
+  wordCount: number;
+  selectionCount: number;
+  comprehensionScore: number;
+}
 
 export interface TelemetryState {
-  paragraphs: Map<number, ParagraphTelemetry>;
+  paragraphs: Map<number, ExtendedParagraphTelemetry>;
   scrollVelocities: number[];
   struggledTerms: StruggledTerm[];
   currentParagraph: number;
@@ -14,7 +22,7 @@ export interface TelemetryState {
 }
 
 export interface TelemetrySnapshot {
-  paragraphs: ParagraphTelemetry[];
+  paragraphs: ExtendedParagraphTelemetry[];
   scrollVelocities: number[];
   struggledTerms: StruggledTerm[];
   currentParagraph: number;
@@ -51,11 +59,25 @@ export function hydrateTelemetryState(snapshot: TelemetrySnapshot): TelemetrySta
   };
 }
 
-export function enterParagraph(state: TelemetryState, index: number): TelemetryState {
-  // Finalize previous paragraph
+export function enterParagraph(state: TelemetryState, index: number, wordCount: number = 0): TelemetryState {
   if (state.currentParagraph >= 0) {
     state = finalizeParagraph(state);
   }
+  
+  // Initialize new paragraph if it doesn't exist
+  if (!state.paragraphs.has(index)) {
+    state.paragraphs.set(index, {
+      paragraphIndex: index,
+      dwellTimeMs: 0,
+      hesitationCount: 0,
+      selectionCount: 0,
+      highlightedWords: [],
+      frictionScore: 0,
+      comprehensionScore: 100,
+      wordCount: wordCount,
+    });
+  }
+
   return {
     ...state,
     currentParagraph: index,
@@ -63,64 +85,65 @@ export function enterParagraph(state: TelemetryState, index: number): TelemetryS
   };
 }
 
-function finalizeParagraph(state: TelemetryState): TelemetryState {
+export function finalizeParagraph(state: TelemetryState): TelemetryState {
   const idx = state.currentParagraph;
-  const existing = state.paragraphs.get(idx) || {
-    paragraphIndex: idx,
-    dwellTimeMs: 0,
-    hesitationCount: 0,
-    highlightedWords: [],
-    frictionScore: 0,
-  };
+  const existing = state.paragraphs.get(idx);
+  if (!existing) return state;
 
-  const dwell = existing.dwellTimeMs + (Date.now() - state.paragraphEntryTime);
-  const frictionScore = Math.min(1, (
-    (dwell / FRICTION_DWELL_THRESHOLD) * 0.6 +
-    (existing.hesitationCount / FRICTION_HESITATION_THRESHOLD) * 0.4
+  const sessionDwell = Date.now() - state.paragraphEntryTime;
+  const totalDwell = existing.dwellTimeMs + sessionDwell;
+  
+  // Calculate expected reading time dynamically
+  const expectedDwell = Math.max(existing.wordCount * MS_PER_WORD, 2000); 
+  
+  // Dwell Ratio: 1.0 means read at exactly average speed. > 1.5 indicates struggling.
+  const dwellRatio = totalDwell / expectedDwell;
+  let dwellPenalty = 0;
+  if (dwellRatio > 1.5) dwellPenalty = Math.min((dwellRatio - 1.5) * 0.4, 0.6);
+
+  // Calculate composite friction (0.0 to 1.0)
+  const baseFriction = Math.min(1, (
+    dwellPenalty +
+    (existing.hesitationCount * FRICTION_HESITATION_WEIGHT) +
+    (existing.selectionCount * FRICTION_SELECTION_WEIGHT)
   ));
 
-  const updated = { ...existing, dwellTimeMs: dwell, frictionScore };
+  // Comprehension is inversely proportional to friction
+  const comprehensionScore = Math.max(0, Math.round((1 - baseFriction) * 100));
+
+  const updated = { 
+    ...existing, 
+    dwellTimeMs: totalDwell, 
+    frictionScore: baseFriction,
+    comprehensionScore
+  };
+
   const newMap = new Map(state.paragraphs);
   newMap.set(idx, updated);
 
   return { ...state, paragraphs: newMap };
 }
 
-export function recordHesitation(state: TelemetryState, paragraphIndex: number, word: string): TelemetryState {
-  const existing = state.paragraphs.get(paragraphIndex) || {
-    paragraphIndex,
-    dwellTimeMs: 0,
-    hesitationCount: 0,
-    highlightedWords: [],
-    frictionScore: 0,
-  };
+export function recordHesitation(state: TelemetryState, paragraphIndex: number, word: string, isSelection = false): TelemetryState {
+  const existing = state.paragraphs.get(paragraphIndex);
+  if (!existing) return state;
 
   const updated = {
     ...existing,
-    hesitationCount: existing.hesitationCount + 1,
+    hesitationCount: isSelection ? existing.hesitationCount : existing.hesitationCount + 1,
+    selectionCount: isSelection ? existing.selectionCount + 1 : existing.selectionCount,
     highlightedWords: [...new Set([...existing.highlightedWords, word])],
   };
 
   const newMap = new Map(state.paragraphs);
   newMap.set(paragraphIndex, updated);
 
-  return { ...state, paragraphs: newMap };
+  return finalizeParagraph({ ...state, paragraphs: newMap }); // Recalculate score immediately
 }
 
 export function recordScrollVelocity(state: TelemetryState, velocity: number): TelemetryState {
   const velocities = [...state.scrollVelocities.slice(-50), velocity];
   return { ...state, scrollVelocities: velocities };
-}
-
-export function getAvgScrollVelocity(state: TelemetryState): number {
-  if (state.scrollVelocities.length === 0) return 0;
-  return state.scrollVelocities.reduce((a, b) => a + b, 0) / state.scrollVelocities.length;
-}
-
-export function detectFriction(state: TelemetryState, paragraphIndex: number): boolean {
-  const p = state.paragraphs.get(paragraphIndex);
-  if (!p) return false;
-  return p.frictionScore > 0.5;
 }
 
 export function getStruggledTerms(state: TelemetryState): StruggledTerm[] {
@@ -138,13 +161,3 @@ export function getStruggledTerms(state: TelemetryState): StruggledTerm[] {
   });
   return terms;
 }
-
-export function getFrictionParagraphs(state: TelemetryState): number[] {
-  const result: number[] = [];
-  state.paragraphs.forEach((p) => {
-    if (p.frictionScore > 0.5) result.push(p.paragraphIndex);
-  });
-  return result;
-}
-
-export { SCROLL_VELOCITY_SLOW };

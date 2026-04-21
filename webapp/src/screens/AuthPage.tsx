@@ -68,7 +68,7 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps) {
           >
             <BookOpen className="w-10 h-10 text-primary-foreground" />
           </motion.div>
-          <h1 className="text-4xl font-bold text-primary-foreground mb-4">AppName</h1>
+          <h1 className="text-4xl font-bold text-primary-foreground mb-4">NeuroLens</h1>
           <p className="text-lg text-primary-foreground/80 max-w-md">
             The distraction-free adaptive reader that learns how you read and helps you comprehend better.
           </p>
@@ -102,7 +102,7 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps) {
               <BookOpen className="w-6 h-6 text-primary-foreground" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-foreground">AppName</h1>
+              <h1 className="text-xl font-bold text-foreground">NeuroLens</h1>
               <p className="text-xs text-muted-foreground">Adaptive Reader</p>
             </div>
           </div>

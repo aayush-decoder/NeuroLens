@@ -31,10 +31,12 @@ export async function POST(req: NextRequest) {
     }
 
     // Sanitize: remove control characters (except \n \t) that break Gemini's JSON output
+    /* eslint-disable no-control-regex */
     const safeText = text
       .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, " ")
-      .replace(/\\(?!["\\/bfnrtu])/g, "\\\\") // fix lone backslashes
-      .slice(0, 4000); // cap length
+      /* eslint-enable no-control-regex */
+      .replace(/\\(?!["\\/bfnrtu])/g, "\\\\")
+      .slice(0, 4000);
 
 
     const prompt = `You are a reading-comprehension assistant.

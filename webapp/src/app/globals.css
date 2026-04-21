@@ -160,6 +160,10 @@
     background: linear-gradient(135deg, hsl(var(--violet)), hsl(var(--sky)));
   }
 
+  .gradient-emerald {
+    background: linear-gradient(135deg, hsl(var(--emerald)), hsl(var(--teal)));
+  }
+
   .gradient-rose {
     background: linear-gradient(135deg, hsl(var(--rose)), hsl(var(--coral)));
   }

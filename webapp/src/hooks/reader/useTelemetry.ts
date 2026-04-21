@@ -6,11 +6,10 @@ import {
   recordScrollVelocity,
   getStruggledTerms,
   TelemetryState,
-  TelemetrySnapshot,
-  hydrateTelemetryState,
+  finalizeParagraph,
   serializeTelemetryState,
 } from '@/engines/telemetryEngine';
-import { loadTelemetrySnapshot, saveTelemetrySnapshot } from '@/engines/persistenceEngine';
+import { saveTelemetrySnapshot } from '@/engines/persistenceEngine';
 import { StruggledTerm } from '@/types/reader.types';
 import { sendReaderTelemetry } from '@/lib/reader-api';
 
@@ -18,6 +17,8 @@ export function useTelemetry(fileId: string, sessionId?: string | null) {
   const stateRef = useRef<TelemetryState>(createTelemetryState());
   const [struggledTerms, setStruggledTerms] = useState<StruggledTerm[]>([]);
   const [frictionMap, setFrictionMap] = useState<Map<number, number>>(new Map());
+  const [comprehensionMap, setComprehensionMap] = useState<Map<number, number>>(new Map());
+  
   const lastScrollTelemetryAt = useRef(0);
   const sessionIdRef = useRef<string | null>(sessionId ?? null);
 
@@ -27,7 +28,9 @@ export function useTelemetry(fileId: string, sessionId?: string | null) {
 
   const persistState = useCallback(() => {
     if (!fileId) return;
-    saveTelemetrySnapshot(fileId, serializeTelemetryState(stateRef.current));
+    const snapshot = serializeTelemetryState(stateRef.current);
+    // Type assertion fixes the interface vs Record<string, unknown> mismatch 
+    saveTelemetrySnapshot(fileId, snapshot as unknown as Record<string, unknown>);
   }, [fileId]);
 
   const emitTelemetry = useCallback(async (type: string, value: number, meta?: Record<string, unknown>) => {
@@ -35,61 +38,79 @@ export function useTelemetry(fileId: string, sessionId?: string | null) {
     if (!activeSessionId || activeSessionId.startsWith('local:')) return;
 
     try {
-      await sendReaderTelemetry({
-        sessionId: activeSessionId,
-        type,
-        value,
-        meta,
-      });
+      await sendReaderTelemetry({ sessionId: activeSessionId, type, value, meta });
     } catch {
-      // Backend is best-effort; local telemetry continues even if network fails.
+      // Backend is best-effort
     }
   }, []);
 
-  useEffect(() => {
-    if (!fileId) return;
-
-    const snapshot = loadTelemetrySnapshot(fileId) as TelemetrySnapshot | null;
-    if (snapshot) {
-      stateRef.current = hydrateTelemetryState(snapshot);
-      setFrictionMap(new Map(snapshot.paragraphs.map((paragraph) => [paragraph.paragraphIndex, paragraph.frictionScore])));
-      setStruggledTerms(snapshot.struggledTerms);
-    }
-  }, [fileId]);
-
   const updateFrictionMap = useCallback(() => {
-    const map = new Map<number, number>();
+    // Force a recalculation of the current active paragraph to get real-time dwell updates
+    if (stateRef.current.currentParagraph >= 0) {
+        stateRef.current = finalizeParagraph(stateRef.current);
+        // Reset entry time so we don't double count if we stay on it
+        stateRef.current.paragraphEntryTime = Date.now();
+    }
+
+    const fMap = new Map<number, number>();
+    const cMap = new Map<number, number>();
+    
     stateRef.current.paragraphs.forEach((p, idx) => {
-      map.set(idx, p.frictionScore);
+      fMap.set(idx, p.frictionScore);
+      cMap.set(idx, p.comprehensionScore);
     });
-    setFrictionMap(new Map(map));
+
+    setFrictionMap(fMap);
+    setComprehensionMap(cMap);
     setStruggledTerms(getStruggledTerms(stateRef.current));
   }, []);
 
-  const onParagraphEnter = useCallback((index: number) => {
+  // Native calculation derived directly from the active engine state
+  const getCategorizedStruggles = useCallback(() => {
+    const longStalls: number[] = [];
+    const shortPauses: number[] = [];
+
+    stateRef.current.paragraphs.forEach((p) => {
+      // Expected dwell time: ~260ms per word (fallback to 2000ms minimum)
+      const expectedDwell = Math.max((p.wordCount || 10) * 260, 2000);
+      
+      // If they spend 50% longer than the expected time, mark as a long stall
+      if (p.dwellTimeMs > expectedDwell * 1.5) {
+        longStalls.push(p.paragraphIndex);
+      } 
+      // If they hover/highlight multiple terms, mark as a short pause
+      else if (p.hesitationCount > 2 || p.selectionCount > 0) {
+        shortPauses.push(p.paragraphIndex);
+      }
+    });
+
+    return { longStalls, shortPauses };
+  }, []);
+
+  const onParagraphEnter = useCallback((index: number, wordCount: number) => {
     const previousParagraph = stateRef.current.currentParagraph;
     const dwellMs = previousParagraph >= 0 ? Date.now() - stateRef.current.paragraphEntryTime : 0;
 
-    stateRef.current = enterParagraph(stateRef.current, index);
-    persistState();
+    stateRef.current = enterParagraph(stateRef.current, index, wordCount);
     updateFrictionMap();
+    persistState();
 
     if (previousParagraph >= 0 && dwellMs > 0) {
       void emitTelemetry('pause', dwellMs / 1000, { paragraph: previousParagraph });
     }
   }, [emitTelemetry, persistState, updateFrictionMap]);
 
-  const onHesitation = useCallback((paragraphIndex: number, word: string) => {
-    stateRef.current = recordHesitation(stateRef.current, paragraphIndex, word);
-    persistState();
+  const onHesitation = useCallback((paragraphIndex: number, word: string, isSelection: boolean = false) => {
+    stateRef.current = recordHesitation(stateRef.current, paragraphIndex, word, isSelection);
     updateFrictionMap();
-    void emitTelemetry('highlight', 1, { paragraph: paragraphIndex, word });
+    persistState();
+    
+    void emitTelemetry(isSelection ? 'text_selection' : 'highlight_hover', 1, { paragraph: paragraphIndex, word });
   }, [emitTelemetry, persistState, updateFrictionMap]);
 
   const onScroll = useCallback((velocity: number) => {
     stateRef.current = recordScrollVelocity(stateRef.current, velocity);
-    persistState();
-
+    
     if (stateRef.current.currentParagraph >= 0) {
       const now = Date.now();
       if (now - lastScrollTelemetryAt.current > 900) {
@@ -97,10 +118,9 @@ export function useTelemetry(fileId: string, sessionId?: string | null) {
         void emitTelemetry('scroll', velocity, { paragraph: stateRef.current.currentParagraph });
       }
     }
-  }, [emitTelemetry, persistState]);
+  }, [emitTelemetry]);
 
   const getSessionData = useCallback(() => {
-    // Finalize current paragraph
     if (stateRef.current.currentParagraph >= 0) {
       stateRef.current = enterParagraph(stateRef.current, -1);
     }
@@ -108,26 +128,33 @@ export function useTelemetry(fileId: string, sessionId?: string | null) {
     return {
       paragraphs: Array.from(stateRef.current.paragraphs.values()),
       struggledTerms: getStruggledTerms(stateRef.current),
+      categorizedStruggles: getCategorizedStruggles() 
     };
-  }, [persistState]);
+  }, [persistState, getCategorizedStruggles]);
 
-  // Periodically update friction map
-  useEffect(() => {
-    const interval = setInterval(updateFrictionMap, 3000);
-    return () => clearInterval(interval);
-  }, [updateFrictionMap]);
 
   useEffect(() => {
-    const interval = setInterval(persistState, 5000);
+    const interval = setInterval(() => {
+      updateFrictionMap();
+      
+      // ADD THIS FOR TESTING:
+      console.log("📊 LIVE TELEMETRY UPDATE:");
+      console.log("Friction Map:", Object.fromEntries(frictionMap));
+      console.log("Comprehension Map:", Object.fromEntries(comprehensionMap));
+      console.log("Categorized Struggles:", getCategorizedStruggles());
+      
+    }, 2000); 
     return () => clearInterval(interval);
-  }, [persistState]);
+  }, [updateFrictionMap, frictionMap, comprehensionMap, getCategorizedStruggles]);
 
   return {
     onParagraphEnter,
     onHesitation,
     onScroll,
     frictionMap,
+    comprehensionMap,
     struggledTerms,
     getSessionData,
+    categorizedStruggles: getCategorizedStruggles()
   };
 }

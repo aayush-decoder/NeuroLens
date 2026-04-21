@@ -71,8 +71,19 @@ export async function analyzeReaderSession(sessionId: string) {
   });
 }
 
-export async function adaptReaderText(input: { text: string; strugglingParagraphs: number[] }) {
-  return requestJson<{ modifiedText: string }>(API_ROUTES.adapt, {
+export async function adaptReaderText(input: { 
+  text: string; 
+  strugglingParagraphs: number[];
+  userId?: string;
+  frictionType?: 'LONG_PAUSE' | 'SHORT_PAUSE';
+  paragraphTimings?: { index: number; dwellTimeMs: number }[];
+  useTimeThreshold?: boolean;
+}) {
+  return requestJson<{ 
+    modifiedText: string; 
+    adaptationType?: 'TIME_THRESHOLD' | 'FRICTION_BASED';
+    maxAvgTimeMs?: number;
+  }>(API_ROUTES.adapt, {
     method: 'POST',
     body: JSON.stringify(input),
   });

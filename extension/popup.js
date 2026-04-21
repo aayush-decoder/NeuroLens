@@ -80,7 +80,7 @@ langSelect.addEventListener("change", () => {
     chrome.storage.sync.set({ language: langSelect.value });
 });
 
-// ── Auth: sign in or auto-register ───────────────────────────────────────────
+// ── Auth: sign in or auto-register via /api/auth/extension ───────────────────
 document.getElementById("btn-auth").addEventListener("click", async () => {
     const email    = document.getElementById("auth-email").value.trim();
     const password = document.getElementById("auth-password").value;
@@ -95,12 +95,14 @@ document.getElementById("btn-auth").addEventListener("click", async () => {
     setStatus("Signing in…");
 
     try {
+        // 1. Try login first
         let res = await fetch(`${WEBAPP_BASE}/api/auth/extension/login`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ email, password })
         });
 
+        // 2. User not found → auto-register
         if (res.status === 401) {
             const err = await res.json();
             const msg = (err.error || "").toLowerCase();
@@ -120,8 +122,8 @@ document.getElementById("btn-auth").addEventListener("click", async () => {
             throw new Error(err.error || `HTTP ${res.status}`);
         }
 
-        const data  = await res.json();
-        const user  = { email: data.email, username: data.username, user_id: data.user_id };
+        const data = await res.json();
+        const user = { email: data.email, username: data.username, user_id: data.user_id };
 
         await chrome.storage.local.set({ ar_token: data.access_token, ar_user: user });
         setStatus("", "ok");

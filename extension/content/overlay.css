@@ -618,4 +618,143 @@
 #ar-overlay[data-ar-dark="1"] .ar-md-table th {
     background: #2a2a2a;
     color: #eee;
-}
+}
+
+
+/* ── Phrase Simplification Tooltips ── */
+.ar-simplify-tooltip {
+  position: absolute;
+  z-index: 999999;
+  background: white;
+  border: 2px solid #6366f1;
+  border-radius: 8px;
+  padding: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  transform: translateX(-50%);
+}
+
+.ar-simplify-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: #6366f1;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.ar-simplify-btn:hover {
+  background: #4f46e5;
+}
+
+.ar-icon {
+  font-size: 16px;
+}
+
+.ar-simplify-result {
+  position: absolute;
+  z-index: 999999;
+  background: white;
+  border: 2px solid #6366f1;
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  max-width: 400px;
+  transform: translateX(-50%);
+}
+
+.ar-result-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.ar-result-header strong {
+  color: #6366f1;
+  font-size: 14px;
+}
+
+.ar-close-btn {
+  background: none;
+  border: none;
+  font-size: 18px;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+}
+
+.ar-close-btn:hover {
+  background: #f3f4f6;
+  color: #111827;
+}
+
+.ar-simplified-text {
+  font-size: 14px;
+  line-height: 1.6;
+  color: #111827;
+  margin: 0 0 12px 0;
+}
+
+.ar-explanation {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.ar-explanation summary {
+  cursor: pointer;
+  font-weight: 500;
+  padding: 4px 0;
+}
+
+.ar-explanation summary:hover {
+  color: #6366f1;
+}
+
+.ar-explanation p {
+  margin: 8px 0 0 0;
+  padding-left: 8px;
+  border-left: 2px solid #e5e7eb;
+  line-height: 1.5;
+}
+
+.ar-loading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  color: #6366f1;
+  font-size: 14px;
+}
+
+.ar-spinner {
+  width: 20px;
+  height: 20px;
+  border: 3px solid #e5e7eb;
+  border-top-color: #6366f1;
+  border-radius: 50%;
+  animation: ar-spin 0.8s linear infinite;
+}
+
+@keyframes ar-spin {
+  to { transform: rotate(360deg); }
+}
+
+.ar-error {
+  padding: 12px;
+  color: #dc2626;
+  font-size: 14px;
+}

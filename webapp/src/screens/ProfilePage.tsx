@@ -1,13 +1,14 @@
+'use client';
+
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
-import { User, Globe, Target, BookOpen, Save, ArrowLeft, Sparkles } from 'lucide-react';
+import { User, Globe, Target, Save, ArrowLeft, Sparkles } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useProfile } from '@/hooks/useProfile';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useToast } from '@/hooks/use-toast';
 import DashboardLayout from '@/components/DashboardLayout';
@@ -20,7 +21,6 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     display_name: '',
-    bio: '',
     preferred_language: 'en',
     reading_goal_minutes: 30,
   });
@@ -29,7 +29,6 @@ export default function ProfilePage() {
     if (profile) {
       setForm({
         display_name: profile.display_name || '',
-        bio: profile.bio || '',
         preferred_language: profile.preferred_language || 'en',
         reading_goal_minutes: profile.reading_goal_minutes || 30,
       });
@@ -115,20 +114,6 @@ export default function ProfilePage() {
                 onChange={e => setForm(f => ({ ...f, display_name: e.target.value }))}
                 className="mt-1.5"
                 placeholder="Your display name"
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="bio" className="text-foreground flex items-center gap-2">
-                <BookOpen className="w-4 h-4 text-muted-foreground" /> Bio
-              </Label>
-              <Textarea
-                id="bio"
-                value={form.bio}
-                onChange={e => setForm(f => ({ ...f, bio: e.target.value }))}
-                className="mt-1.5"
-                placeholder="Tell us about yourself..."
-                rows={3}
               />
             </div>
 

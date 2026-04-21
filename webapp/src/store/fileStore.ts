@@ -9,6 +9,7 @@ interface FileStore {
   theme: 'light' | 'dark';
 
   addFile: (file: ReaderFile) => void;
+  upsertFile: (file: ReaderFile) => void;
   removeFile: (id: string) => void;
   updateFile: (id: string, updates: Partial<ReaderFile>) => void;
   addFolder: (folder: Folder) => void;
@@ -27,7 +28,18 @@ export const useFileStore = create<FileStore>((set, get) => ({
   theme: 'light',
 
   addFile: (file) => {
+    // Guard against duplicate IDs
+    if (get().files.some(f => f.id === file.id)) return;
     const files = [...get().files, file];
+    set({ files });
+    saveFiles(files);
+  },
+
+  upsertFile: (file) => {
+    const existing = get().files.find(f => f.id === file.id);
+    const files = existing
+      ? get().files.map(f => f.id === file.id ? { ...f, ...file } : f)
+      : [...get().files, file];
     set({ files });
     saveFiles(files);
   },
@@ -71,10 +83,17 @@ export const useFileStore = create<FileStore>((set, get) => ({
   },
 
   loadFromStorage: () => {
-    const files = loadFiles();
+    const stored = loadFiles();
     const folders = loadFolders();
     const theme = (localStorage.getItem('adaptive-reader:theme') as 'light' | 'dark') || 'light';
     if (theme === 'dark') document.documentElement.classList.add('dark');
-    set({ files, folders, theme });
+
+    // Merge stored files with any already in memory, deduplicating by ID
+    // In-memory wins (it may have fresher content e.g. from a cloud fetch)
+    const inMemory = get().files;
+    const inMemoryIds = new Set(inMemory.map(f => f.id));
+    const merged = [...inMemory, ...stored.filter(f => !inMemoryIds.has(f.id))];
+
+    set({ files: merged, folders, theme });
   },
 }));

@@ -10,8 +10,7 @@
     ],
     "host_permissions": [
         "<all_urls>",
-        "https://enfinity-hackathon-backend.onrender.com/*",
-        "https://enfinity-hackathon.vercel.app/*"
+        "https://aleta-stairless-nguyet.ngrok-free.dev/*"
     ],
     "background": {
         "service_worker": "background.js"
@@ -29,4 +28,4 @@
     "content_security_policy": {
         "extension_pages": "script-src 'self'; object-src 'self'"
     }
-}
+}

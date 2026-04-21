@@ -1,3 +1,4 @@
+// src/app/api/session/start/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
@@ -20,6 +21,20 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // 1. Upsert the User
+    // We must provide 'username' and 'password' because they are required in the schema!
+    const user = await prisma.user.upsert({
+      where: { id: userId },
+      update: {},
+      create: {
+        id: userId,
+        email: `user-${userId}@neurolens.local`,
+        username: `guest-${userId}`,       // 👈 FIX: Added missing required field
+        password: "stub-password-12345",   // 👈 FIX: Added missing required field
+      },
+    });
+
+    // 2. Upsert the Content
     const content = await prisma.content.upsert({
       where: { id: contentId },
       create: {
@@ -37,9 +52,11 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    // 3. Create the Session
+    // We must pass BOTH userId and contentId!
     const session = await prisma.readingSession.create({
       data: {
-        userId,
+        userId: user.id, // 👈 FIX: We must pass the userId to satisfy the schema relation
         contentId: content.id,
         startTime: startedAt ? new Date(startedAt) : undefined,
       },
@@ -49,9 +66,12 @@ export async function POST(req: NextRequest) {
       sessionId: session.id,
       contentId: content.id,
     });
+    
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    console.error("SESSION START ERROR:", error);
+    console.error("🔥 SESSION START ERROR:", error);
+    
+    // Return a local offline fallback if database completely fails
     return NextResponse.json({
       sessionId: `local:${crypto.randomUUID()}`,
       contentId: null,
